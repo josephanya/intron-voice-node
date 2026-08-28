@@ -4,6 +4,9 @@ All notable changes to this package will be documented in this file.
 
 ## 0.0.0
 
+- Added release-preparation coverage with explicit API contract tests, guarded
+  live smoke tests, package entry-point parity checks, and release validation
+  scripts.
 - Added language and voice catalog models, expanded server-side README guidance,
   and runnable Node.js examples for STT, TTS, cancellation, error handling,
   token providers, fake transport testing, ESM, and CommonJS usage.

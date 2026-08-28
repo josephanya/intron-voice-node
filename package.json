@@ -30,7 +30,10 @@
     "format:check": "prettier --check .",
     "lint": "eslint .",
     "pretest": "npm run build",
+    "release:check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build && npm pack --dry-run",
     "test": "vitest run",
+    "test:contract": "vitest run test/contract.test.ts",
+    "test:live": "vitest run test/live-smoke.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [

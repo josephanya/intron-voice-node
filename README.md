@@ -344,6 +344,25 @@ const client = new IntronClient({
 See `examples/fake-transport-testing.ts` for a complete fake HTTP transport
 example.
 
+## Contract And Live Smoke Tests
+
+The SDK keeps explicit contract tests for the service wire format, package entry
+points, retry metadata, and cancellation behavior:
+
+```sh
+npm run test:contract
+```
+
+Live smoke tests are opt-in and are skipped by default. They require an API key,
+an explicit enable flag, and use only synthetic test text/audio:
+
+```sh
+INTRON_API_KEY=... INTRON_RUN_LIVE_TESTS=true npm run test:live
+```
+
+Do not use patient audio, personal data, bearer tokens in fixtures, or committed
+`.env` files for live testing.
+
 ## Examples
 
 - `examples/sync-file-transcription.ts` - synchronous file transcription from a filesystem path.
@@ -380,6 +399,9 @@ npm run format:check
 npm run lint
 npm run typecheck
 npm test
+npm run release:check
 ```
 
-Normal tests use fake transports and do not contact the live service.
+Normal tests use fake transports and do not contact the live service. Before
+publishing, run `npm pack --dry-run` or `npm run release:check` to inspect the
+package artifact contents.
