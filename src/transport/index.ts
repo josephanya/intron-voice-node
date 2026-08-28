@@ -39,6 +39,93 @@ export interface IntronHttpTransport {
 }
 
 /**
+ * Retry policy used by REST requests.
+ */
+export interface IntronHttpRetryPolicy {
+  /** Maximum number of retry attempts after the initial request fails. */
+  readonly maxRetries: number;
+  /** Initial exponential backoff delay in milliseconds. */
+  readonly initialDelayMs: number;
+  /** Maximum backoff delay in milliseconds. */
+  readonly maxDelayMs: number;
+  /** Multiplier applied to the exponential backoff delay. */
+  readonly backoffMultiplier: number;
+  /** Jitter ratio applied around the computed delay. */
+  readonly jitterRatio: number;
+  /** Random source used for jitter. */
+  readonly random: () => number;
+}
+
+/**
+ * Per-request retry options.
+ */
+export interface IntronHttpRequestRetryOptions {
+  /** Whether this request may retry when the failure is retryable. */
+  readonly enabled?: boolean;
+  /** Maximum number of retry attempts after the initial request fails. */
+  readonly maxRetries?: number;
+}
+
+/**
+ * Default clock implementation backed by the Node.js runtime timers.
+ */
+export class IntronSystemClock implements IntronClock {
+  /** Returns the current timestamp in milliseconds. */
+  public now(): number {
+    return Date.now();
+  }
+
+  /** Schedules a callback with `setTimeout`. */
+  public setTimeout(callback: () => void, delayMs: number): IntronTimerHandle {
+    const timeout = setTimeout(callback, delayMs);
+
+    return {
+      clear: () => {
+        clearTimeout(timeout);
+      },
+    };
+  }
+}
+
+/**
+ * Default HTTP transport backed by the Node.js global `fetch` implementation.
+ */
+export class IntronFetchHttpTransport implements IntronHttpTransport {
+  /** Sends an HTTP request with global `fetch`. */
+  public async send(request: IntronHttpRequest): Promise<IntronHttpResponse> {
+    const response = await fetch(request.url, {
+      method: request.method,
+      headers: request.headers,
+      body: request.body,
+      signal: request.signal,
+      ...(isAsyncIterableBody(request.body) ? { duplex: 'half' } : {}),
+    } as RequestInit & { readonly duplex?: 'half' });
+    const body = new Uint8Array(await response.arrayBuffer());
+
+    return {
+      status: response.status,
+      headers: response.headers,
+      body,
+    };
+  }
+
+  /** Releases transport resources. */
+  public close(): Promise<void> {
+    return Promise.resolve();
+  }
+}
+
+function isAsyncIterableBody(
+  body: IntronHttpRequest['body'],
+): body is AsyncIterable<Uint8Array> {
+  return (
+    body !== undefined &&
+    typeof body === 'object' &&
+    Symbol.asyncIterator in body
+  );
+}
+
+/**
  * States exposed by an injectable WebSocket connection.
  */
 export type IntronWebSocketState = 'connecting' | 'open' | 'closing' | 'closed';

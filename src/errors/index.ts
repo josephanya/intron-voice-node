@@ -221,6 +221,15 @@ export function createIntronTransportError(
     });
   }
 
+  if (isTimeoutError(cause)) {
+    return new IntronTimeoutError({
+      message: 'Intron request timed out.',
+      retryable: true,
+      cause,
+      ...(operation === undefined ? {} : { operation }),
+    });
+  }
+
   return new IntronTransportError({
     message: 'Intron transport request failed.',
     retryable: true,
@@ -250,4 +259,8 @@ function isRetryableStatus(status: number): boolean {
 
 function isAbortError(cause: unknown): boolean {
   return cause instanceof DOMException && cause.name === 'AbortError';
+}
+
+function isTimeoutError(cause: unknown): boolean {
+  return cause instanceof DOMException && cause.name === 'TimeoutError';
 }

@@ -2,6 +2,9 @@ export { IntronClient } from './client/intron-client.js';
 export type {
   IntronAuthOptions,
   IntronClientConfig,
+  IntronJsonRequestOptions,
+  IntronMultipartRequestOptions,
+  IntronRequestOptions,
   IntronResolvedClientConfig,
   IntronTokenProvider,
 } from './client/types.js';
@@ -21,6 +24,8 @@ export type { IntronApiErrorOptions } from './errors/index.js';
 export { redactLogFields } from './logging/redaction.js';
 export type { IntronLogFields, IntronLogger } from './logging/types.js';
 export type {
+  IntronHttpRequestRetryOptions,
+  IntronHttpRetryPolicy,
   IntronFileUploadSource,
   IntronHttpRequest,
   IntronHttpResponse,
@@ -34,4 +39,8 @@ export type {
   IntronWebSocketEventMap,
   IntronWebSocketState,
   IntronWebSocketTransport,
+} from './transport/index.js';
+export {
+  IntronFetchHttpTransport,
+  IntronSystemClock,
 } from './transport/index.js';

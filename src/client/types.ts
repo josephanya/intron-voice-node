@@ -1,6 +1,8 @@
 import type { IntronLogger } from '../logging/types.js';
 import type {
   IntronClock,
+  IntronHttpRequestRetryOptions,
+  IntronHttpRetryPolicy,
   IntronHttpTransport,
   IntronWebSocketTransport,
 } from '../transport/index.js';
@@ -35,6 +37,8 @@ export interface IntronClientConfig {
   readonly requestTimeout?: number;
   /** Receive timeout in milliseconds. */
   readonly receiveTimeout?: number;
+  /** Retry policy used by REST requests. */
+  readonly retryPolicy?: Partial<IntronHttpRetryPolicy>;
   /** Injectable HTTP transport. */
   readonly httpTransport?: IntronHttpTransport;
   /** Injectable WebSocket transport. */
@@ -59,6 +63,8 @@ export interface IntronResolvedClientConfig {
   readonly requestTimeout?: number;
   /** Receive timeout in milliseconds when configured. */
   readonly receiveTimeout?: number;
+  /** Retry policy used by REST requests. */
+  readonly retryPolicy: IntronHttpRetryPolicy;
 }
 
 /**
@@ -67,4 +73,40 @@ export interface IntronResolvedClientConfig {
 export interface IntronAuthOptions {
   /** Optional cancellation signal. */
   readonly signal?: AbortSignal;
+}
+
+/**
+ * Common options for REST requests made by the SDK.
+ */
+export interface IntronRequestOptions {
+  /** HTTP method for the request. */
+  readonly method?: string;
+  /** Endpoint path resolved against the configured REST base URL. */
+  readonly path: string;
+  /** Optional query parameters appended to the request URL. */
+  readonly query?: Readonly<Record<string, string | number | boolean>>;
+  /** Additional request headers. */
+  readonly headers?: Readonly<Record<string, string>>;
+  /** Optional cancellation signal. */
+  readonly signal?: AbortSignal;
+  /** Retry behavior for this operation. */
+  readonly retry?: boolean | IntronHttpRequestRetryOptions;
+  /** SDK operation name used in errors. */
+  readonly operation?: string;
+}
+
+/**
+ * Options for JSON REST requests.
+ */
+export interface IntronJsonRequestOptions extends IntronRequestOptions {
+  /** JSON-serializable request body. */
+  readonly json?: unknown;
+}
+
+/**
+ * Options for multipart REST requests.
+ */
+export interface IntronMultipartRequestOptions extends IntronRequestOptions {
+  /** Multipart form body. Boundary handling is left to the HTTP implementation. */
+  readonly formData: FormData;
 }
