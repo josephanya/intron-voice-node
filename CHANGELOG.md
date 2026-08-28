@@ -4,6 +4,9 @@ All notable changes to this package will be documented in this file.
 
 ## 0.0.0
 
+- Added WebSocket streaming TTS synthesis with typed session events, text chunk
+  validation, fetch/commit payloads, decoded audio chunks, cancellation,
+  reconnect lifecycle handling, and bounded text buffering.
 - Added synchronous and queued TTS generation with typed status polling,
   validation for documented voice fields and output formats, 4096 character text
   limit checks, and optional `Uint8Array` audio downloads.

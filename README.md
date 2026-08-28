@@ -26,6 +26,8 @@ audio streams.
 
 Phase 7 adds synchronous and queued text-to-speech generation over REST.
 
+Phase 8 adds WebSocket streaming text-to-speech synthesis.
+
 ## Requirements
 
 - Node.js 20 or newer
@@ -187,6 +189,37 @@ sends `voice_language`, `voice_accent`, `voice_gender`, and
 accepts WAV and OPUS output formats. Remote `audioPath` values should be treated
 as ephemeral service paths; set `downloadAudio: true` when you want the SDK to
 fetch the bytes immediately as a `Uint8Array`.
+
+Stream text-to-speech audio over WebSocket without adding a playback dependency:
+
+```ts
+const session = await client.startStreamingSpeech({
+  voiceLanguage: 'en',
+  voiceAccent: 'gh',
+  voiceGender: 'female',
+  outputAudioFormat: 'wav',
+});
+
+await session.sendText('Please take your medication after breakfast.');
+await session.fetchAudioChunk();
+await session.commit();
+
+for await (const chunk of session.audioChunks) {
+  await writeAudioBytes(chunk.audio);
+}
+```
+
+Streaming TTS sends the documented `INPUT_TEXT_CHUNK`, `FETCH_AUDIO_CHUNK`, and
+`COMMIT` messages. Text chunks are validated locally at the documented 10 to 100
+character range, and audio responses are decoded into `Uint8Array` values. The
+SDK exposes `session.events` for acknowledgements, reconnect lifecycle events,
+server errors, and committed audio messages.
+
+Streaming TTS sessions use the same lifecycle posture as streaming STT: the SDK
+rolls over before the service's 300 second session limit, treats documented
+session time-limit messages as reconnectable, and keeps caller-supplied text in a
+bounded buffer while reconnecting. Defaults are 4096 queued text characters, 3
+reconnect attempts, 250 ms initial backoff, and 5 seconds maximum backoff.
 
 Supported upload sources include local paths, `Uint8Array` buffers, Node.js
 `Readable` streams, and `AsyncIterable<Uint8Array>` chunks. Supported file

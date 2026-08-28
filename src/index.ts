@@ -68,7 +68,14 @@ export {
   validateTtsQueueOptions,
   withTtsAudio,
 } from './tts/files.js';
+export {
+  createTtsStreamingSession,
+  createTtsStreamingUrl,
+  validateTtsStreamingOptions,
+} from './tts/streaming.js';
+export { TtsSessionState } from './tts/types.js';
 export type {
+  TtsAudioChunk,
   TtsFailureDetails,
   TtsGenerateOptions,
   TtsJob,
@@ -79,6 +86,10 @@ export type {
   TtsRequestMetadata,
   TtsResult,
   TtsStatusOptions,
+  TtsStreamingEvent,
+  TtsStreamingOptions,
+  TtsStreamingServerMessageType,
+  TtsStreamingSession,
   TtsSynthesisOptions,
   TtsVoiceGender,
   WaitForSpeechOptions,

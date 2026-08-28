@@ -55,6 +55,11 @@ import {
   validateTtsQueueOptions,
   withTtsAudio,
 } from '../tts/files.js';
+import {
+  createTtsStreamingSession,
+  createTtsStreamingUrl,
+  validateTtsStreamingOptions,
+} from '../tts/streaming.js';
 import type {
   TtsGenerateOptions,
   TtsJob,
@@ -62,6 +67,8 @@ import type {
   TtsResult,
   TtsStatusOptions,
   TtsQueueOptions,
+  TtsStreamingOptions,
+  TtsStreamingSession,
   WaitForSpeechOptions,
 } from '../tts/types.js';
 import type {
@@ -436,6 +443,49 @@ export class IntronClient {
 
       await waitForDelay(this.clock, pollingIntervalMs, options.signal);
     }
+  }
+
+  /**
+   * Opens a WebSocket session for streaming TTS synthesis.
+   *
+   * @param options - Streaming voice and output options.
+   */
+  public async startStreamingSpeech(
+    options: TtsStreamingOptions,
+  ): Promise<TtsStreamingSession> {
+    validateTtsStreamingOptions(options);
+    const authorization = await this.resolveAuthorizationHeader({
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
+    const connect = () =>
+      this.websocketTransport.connect({
+        url: createTtsStreamingUrl(this.config.websocketBaseUrl, options),
+        headers: { authorization },
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+      });
+    const connection = await connect();
+
+    return createTtsStreamingSession({
+      connection,
+      connect,
+      clock: this.clock,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+      ...(options.rolloverIntervalMs === undefined
+        ? {}
+        : { rolloverIntervalMs: options.rolloverIntervalMs }),
+      ...(options.maxBufferedTextCharacters === undefined
+        ? {}
+        : { maxBufferedTextCharacters: options.maxBufferedTextCharacters }),
+      ...(options.maxReconnectAttempts === undefined
+        ? {}
+        : { maxReconnectAttempts: options.maxReconnectAttempts }),
+      ...(options.reconnectInitialDelayMs === undefined
+        ? {}
+        : { reconnectInitialDelayMs: options.reconnectInitialDelayMs }),
+      ...(options.reconnectMaxDelayMs === undefined
+        ? {}
+        : { reconnectMaxDelayMs: options.reconnectMaxDelayMs }),
+    });
   }
 
   /**
