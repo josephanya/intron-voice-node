@@ -4,6 +4,9 @@ All notable changes to this package will be documented in this file.
 
 ## 0.0.0
 
+- Added language and voice catalog models, expanded server-side README guidance,
+  and runnable Node.js examples for STT, TTS, cancellation, error handling,
+  token providers, fake transport testing, ESM, and CommonJS usage.
 - Added WebSocket streaming TTS synthesis with typed session events, text chunk
   validation, fetch/commit payloads, decoded audio chunks, cancellation,
   reconnect lifecycle handling, and bounded text buffering.

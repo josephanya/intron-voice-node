@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint';
 
 export default defineConfig(
   {
-    ignores: ['dist/**', 'coverage/**', 'node_modules/**'],
+    ignores: ['dist/**', 'coverage/**', 'node_modules/**', 'examples/*.cjs'],
   },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
@@ -13,7 +13,7 @@ export default defineConfig(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['eslint.config.js'],
+          allowDefaultProject: ['eslint.config.js', 'examples/*.cjs'],
         },
         tsconfigRootDir: import.meta.dirname,
       },

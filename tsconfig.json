@@ -1,6 +1,10 @@
 {
   "compilerOptions": {
     "target": "ES2022",
+    "baseUrl": ".",
+    "paths": {
+      "@intron-voice-node": ["./src/index.ts"]
+    },
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
@@ -19,5 +23,11 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src", "test", "vitest.config.ts", "eslint.config.js"]
+  "include": [
+    "src",
+    "test",
+    "examples/**/*.ts",
+    "vitest.config.ts",
+    "eslint.config.js"
+  ]
 }

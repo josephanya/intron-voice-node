@@ -24,6 +24,24 @@ export type { IntronApiErrorOptions } from './errors/index.js';
 export { redactLogFields } from './logging/redaction.js';
 export type { IntronLogFields, IntronLogger } from './logging/types.js';
 export {
+  INTRON_STT_LANGUAGES,
+  INTRON_STT_SUPPORTED_LANGUAGES_URL,
+  INTRON_TTS_LANGUAGES,
+  INTRON_TTS_SUPPORTED_LANGUAGES_URL,
+  isKnownIntronSttLanguageCode,
+  isKnownIntronTtsLanguageCode,
+} from './languages.js';
+export type {
+  IntronKnownSttLanguageCode,
+  IntronKnownTtsLanguageCode,
+  IntronSttLanguage,
+  IntronSttLanguageCode,
+  IntronTtsLanguage,
+  IntronTtsLanguageCode,
+  IntronTtsVoiceAccent,
+  IntronTtsVoiceConfiguration,
+} from './languages.js';
+export {
   createSttStreamingSession,
   createSttStreamingUrl,
   validateSttStreamingOptions,

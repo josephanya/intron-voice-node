@@ -1,4 +1,8 @@
 import type { IntronRequestOptions } from '../client/types.js';
+import type {
+  IntronTtsLanguageCode,
+  IntronTtsVoiceAccent,
+} from '../languages.js';
 
 /** Supported TTS output audio formats. */
 export type TtsOutputAudioFormat = 'wav' | 'opus';
@@ -27,9 +31,9 @@ export interface TtsSynthesisOptions {
   /** Text to synthesize. Must be 1 to 4096 characters. */
   readonly text: string;
   /** Language code for the voice and input text. */
-  readonly voiceLanguage: string;
+  readonly voiceLanguage: IntronTtsLanguageCode;
   /** Voice accent value from the Intron-supported catalog. */
-  readonly voiceAccent: string;
+  readonly voiceAccent: IntronTtsVoiceAccent;
   /** Voice gender. */
   readonly voiceGender: TtsVoiceGender;
   /** Output format. Defaults to the service default, currently WAV. */
@@ -130,9 +134,9 @@ export enum TtsSessionState {
 /** Options for streaming TTS synthesis over WebSocket. */
 export interface TtsStreamingOptions {
   /** Language code for the voice and input text. */
-  readonly voiceLanguage: string;
+  readonly voiceLanguage: IntronTtsLanguageCode;
   /** Voice accent value from the Intron-supported catalog. */
-  readonly voiceAccent: string;
+  readonly voiceAccent: IntronTtsVoiceAccent;
   /** Voice gender. */
   readonly voiceGender: TtsVoiceGender;
   /** Output format. Defaults to the service default, currently WAV. */

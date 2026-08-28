@@ -1,6 +1,7 @@
 import type { Readable } from 'node:stream';
 
 import type { IntronRequestOptions } from '../client/types.js';
+import type { IntronSttLanguageCode } from '../languages.js';
 import type { IntronFileUploadSource } from '../transport/index.js';
 
 /**
@@ -43,7 +44,7 @@ export interface SttUploadOptions {
   /** Audio file source. */
   readonly source: IntronFileUploadSource;
   /** Input ASR language code. */
-  readonly language?: string;
+  readonly language?: IntronSttLanguageCode;
   /** Whether diarization should be enabled. Defaults to omitted. */
   readonly diarization?: boolean;
   /** Custom post-processing template identifier. */
@@ -174,7 +175,7 @@ export interface SttStreamingOptions {
   /** Number of input channels. Defaults to 1. */
   readonly channels?: number;
   /** Input language code. Defaults to `en`. */
-  readonly language?: string;
+  readonly language?: IntronSttLanguageCode;
   /** Optional cancellation signal. */
   readonly signal?: AbortSignal;
   /** Rollover interval in milliseconds. Defaults to 270000. */
