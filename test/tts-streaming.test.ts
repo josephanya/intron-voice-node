@@ -9,7 +9,7 @@ import { FakeWebSocketTransport } from './fakes/fake-websocket-transport.js';
 
 const STREAMING_OPTIONS = {
   voiceLanguage: 'en',
-  voiceAccent: 'nigerian',
+  voiceAccent: 'hausa',
   voiceGender: 'female',
 } as const;
 
@@ -26,7 +26,7 @@ describe('TTS websocket streaming synthesis', () => {
     expect(websocketTransport.connects).toHaveLength(1);
     const connect = websocketTransport.connects[0];
     expect(connect?.url.toString()).toBe(
-      'wss://infer.voice.intron.io/tts/v1/stream?voice_accent=nigerian&voice_gender=female&voice_language=en&output_audio_format=wav',
+      'wss://infer.voice.intron.io/tts/v1/stream?voice_accent=hausa&voice_gender=female&voice_language=en&output_audio_format=wav',
     );
     expect(connect?.headers?.authorization).toBe('Bearer server-key');
     expect(websocketTransport.connection.sent).toEqual([]);

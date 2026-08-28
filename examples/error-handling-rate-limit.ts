@@ -17,7 +17,7 @@ try {
   await client.generateSpeech({
     text: 'Your lab results are ready for review.',
     voiceLanguage: 'en',
-    voiceAccent: 'ghanaian',
+    voiceAccent: 'hausa',
     voiceGender: 'female',
   });
 } catch (error) {

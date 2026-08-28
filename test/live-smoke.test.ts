@@ -8,20 +8,20 @@ const runLiveTests =
 const describeLive = runLiveTests ? describe : describe.skip;
 
 describeLive('live smoke tests', () => {
-  it('can submit a short synthetic TTS request', async () => {
+  it('can submit a short synthetic queued TTS request', async () => {
     const client = liveClient();
 
-    const result = await client.generateSpeech({
+    const result = await client.enqueueSpeech({
       text: 'This is an SDK smoke test.',
       voiceLanguage: 'en',
-      voiceAccent: 'nigerian',
+      voiceAccent: 'hausa',
       voiceGender: 'female',
       outputAudioFormat: 'wav',
     });
 
+    expect(result.textId).toBeTypeOf('string');
     expect(result.request.status).toBeGreaterThanOrEqual(200);
     expect(result.request.status).toBeLessThan(300);
-    expect(result.raw).toBeDefined();
   }, 30_000);
 
   it('can submit a short synthetic STT upload request', async () => {

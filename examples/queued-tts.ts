@@ -9,7 +9,7 @@ const client = new IntronClient({
 const job = await client.enqueueSpeech({
   text: 'Please collect your medication after the consultation.',
   voiceLanguage: 'en',
-  voiceAccent: 'nigerian',
+  voiceAccent: 'hausa',
   voiceGender: 'male',
   outputAudioFormat: 'opus',
 });

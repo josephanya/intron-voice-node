@@ -10,7 +10,7 @@ const client = new IntronClient({
 
 const session = await client.startStreamingSpeech({
   voiceLanguage: 'en',
-  voiceAccent: 'nigerian',
+  voiceAccent: 'hausa',
   voiceGender: 'female',
   outputAudioFormat: 'wav',
 });

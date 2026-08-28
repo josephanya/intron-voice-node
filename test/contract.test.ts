@@ -129,7 +129,7 @@ describe('Intron Voice API wire contracts', () => {
     });
     const session = await client.startStreamingSpeech({
       voiceLanguage: 'en',
-      voiceAccent: 'nigerian',
+      voiceAccent: 'hausa',
       voiceGender: 'female',
     });
 

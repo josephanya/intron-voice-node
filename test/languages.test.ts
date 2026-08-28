@@ -48,11 +48,11 @@ describe('language and voice catalogs', () => {
   it('allows raw documented accent values in voice configuration', () => {
     const voice: IntronTtsVoiceConfiguration = {
       voiceLanguage: 'en',
-      voiceAccent: 'ghanaian',
+      voiceAccent: 'hausa',
       voiceGender: 'female',
       outputAudioFormat: 'wav',
     };
 
-    expect(voice.voiceAccent).toBe('ghanaian');
+    expect(voice.voiceAccent).toBe('hausa');
   });
 });

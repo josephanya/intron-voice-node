@@ -177,7 +177,7 @@ Generate speech from text synchronously:
 const speech = await client.generateSpeech({
   text: 'Your appointment is confirmed for 10 AM.',
   voiceLanguage: 'en',
-  voiceAccent: 'ghanaian',
+  voiceAccent: 'hausa',
   voiceGender: 'female',
   outputAudioFormat: 'wav',
   downloadAudio: true,
@@ -195,7 +195,7 @@ Queue speech synthesis and poll for completion:
 const job = await client.enqueueSpeech({
   text: 'Please collect your medication after the consultation.',
   voiceLanguage: 'en',
-  voiceAccent: 'nigerian',
+  voiceAccent: 'hausa',
   voiceGender: 'male',
   outputAudioFormat: 'opus',
 });
@@ -222,7 +222,7 @@ Stream text-to-speech audio over WebSocket without adding a playback dependency:
 ```ts
 const session = await client.startStreamingSpeech({
   voiceLanguage: 'en',
-  voiceAccent: 'nigerian',
+  voiceAccent: 'hausa',
   voiceGender: 'female',
   outputAudioFormat: 'wav',
 });

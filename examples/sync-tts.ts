@@ -11,7 +11,7 @@ const client = new IntronClient({
 const speech = await client.generateSpeech({
   text: 'Your appointment is confirmed for 10 AM.',
   voiceLanguage: 'en',
-  voiceAccent: 'ghanaian',
+  voiceAccent: 'hausa',
   voiceGender: 'female',
   outputAudioFormat: 'wav',
   downloadAudio: true,
