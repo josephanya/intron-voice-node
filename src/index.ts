@@ -1,6 +1,8 @@
 export { IntronClient } from './client/intron-client.js';
 export type {
+  IntronAuthOptions,
   IntronClientConfig,
+  IntronResolvedClientConfig,
   IntronTokenProvider,
 } from './client/types.js';
 export {
@@ -9,7 +11,11 @@ export {
   IntronProtocolError,
   IntronRateLimitError,
   IntronRequestCancelledError,
+  IntronTimeoutError,
   IntronTransportError,
+  createIntronHttpError,
+  createIntronTransportError,
+  parseRetryAfter,
 } from './errors/index.js';
 export type { IntronApiErrorOptions } from './errors/index.js';
 export { redactLogFields } from './logging/redaction.js';

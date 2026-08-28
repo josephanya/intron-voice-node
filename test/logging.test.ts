@@ -8,6 +8,7 @@ describe('logger redaction', () => {
       redactLogFields({
         authorization: 'authorization-header-value',
         apiKey: 'api-key-value',
+        token: 'short-lived-value',
         transcript: 'full transcript text',
         patientIdentifier: 'person-123',
         audioBytes: new Uint8Array([1, 2, 3]),
@@ -16,6 +17,7 @@ describe('logger redaction', () => {
     ).toEqual({
       authorization: '[REDACTED]',
       apiKey: '[REDACTED]',
+      token: '[REDACTED]',
       transcript: '[REDACTED]',
       patientIdentifier: '[REDACTED]',
       audioBytes: '[REDACTED]',

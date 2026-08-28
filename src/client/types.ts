@@ -12,9 +12,9 @@ export interface IntronTokenProvider {
   /**
    * Resolves an access token for an SDK operation.
    *
-   * @param options - Optional cancellation controls for token acquisition.
+   * @param signal - Optional cancellation signal for token acquisition.
    */
-  getToken(options?: { readonly signal?: AbortSignal }): Promise<string>;
+  resolveToken(signal?: AbortSignal): Promise<string>;
 }
 
 /**
@@ -43,4 +43,28 @@ export interface IntronClientConfig {
   readonly clock?: IntronClock;
   /** Optional logger used by the SDK. */
   readonly logger?: IntronLogger;
+}
+
+/**
+ * Secret-free client configuration normalized by the SDK.
+ */
+export interface IntronResolvedClientConfig {
+  /** Base URL for REST API calls. */
+  readonly apiBaseUrl: URL;
+  /** Base URL for WebSocket API calls. */
+  readonly websocketBaseUrl: URL;
+  /** Connection timeout in milliseconds when configured. */
+  readonly connectTimeout?: number;
+  /** Request timeout in milliseconds when configured. */
+  readonly requestTimeout?: number;
+  /** Receive timeout in milliseconds when configured. */
+  readonly receiveTimeout?: number;
+}
+
+/**
+ * Options used when resolving authentication metadata.
+ */
+export interface IntronAuthOptions {
+  /** Optional cancellation signal. */
+  readonly signal?: AbortSignal;
 }
