@@ -1,6 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { IntronClient, IntronRequestCancelledError } from '@intron-voice-node';
+import { IntronClient, IntronRequestCancelledError } from 'intron-voice-node';
 
 import { requiredEnv } from './env.js';
 

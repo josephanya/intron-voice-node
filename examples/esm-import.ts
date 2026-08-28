@@ -1,4 +1,4 @@
-import { IntronClient, INTRON_TTS_LANGUAGES } from '@intron-voice-node';
+import { IntronClient, INTRON_TTS_LANGUAGES } from 'intron-voice-node';
 
 import { requiredEnv } from './env.js';
 

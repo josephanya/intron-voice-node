@@ -1,4 +1,4 @@
-import { IntronClient, type IntronTokenProvider } from '@intron-voice-node';
+import { IntronClient, type IntronTokenProvider } from 'intron-voice-node';
 
 const tokenProvider: IntronTokenProvider = {
   resolveToken: async (signal) => {

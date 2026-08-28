@@ -1,6 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 
-import { IntronClient } from '@intron-voice-node';
+import { IntronClient } from 'intron-voice-node';
 
 import { requiredEnv } from './env.js';
 

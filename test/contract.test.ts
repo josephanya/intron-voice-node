@@ -252,7 +252,7 @@ describe('Intron Voice API wire contracts', () => {
   });
 
   it('exposes the same runtime public API from ESM and CommonJS entry points', async () => {
-    const packageName = '@intron-voice-node';
+    const packageName = 'intron-voice-node';
     const esmSdk = (await import(packageName)) as Record<string, unknown>;
     const require = createRequire(import.meta.url);
     const cjsSdk = require(packageName) as Record<string, unknown>;

@@ -2,7 +2,7 @@ import {
   IntronClient,
   type IntronHttpRequest,
   type IntronHttpTransport,
-} from '@intron-voice-node';
+} from 'intron-voice-node';
 
 const encoder = new TextEncoder();
 

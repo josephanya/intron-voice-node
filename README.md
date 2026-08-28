@@ -17,7 +17,7 @@ mobile apps, desktop clients, or other untrusted runtimes.
 ## Installation
 
 ```sh
-npm install @intron-voice-node
+npm install intron-voice-node
 ```
 
 ## Imports
@@ -25,13 +25,13 @@ npm install @intron-voice-node
 ESM:
 
 ```ts
-import { IntronClient } from '@intron-voice-node';
+import { IntronClient } from 'intron-voice-node';
 ```
 
 CommonJS:
 
 ```js
-const { IntronClient } = require('@intron-voice-node');
+const { IntronClient } = require('intron-voice-node');
 ```
 
 ## Authentication
@@ -39,7 +39,7 @@ const { IntronClient } = require('@intron-voice-node');
 Use an API key only from a trusted server process:
 
 ```ts
-import { IntronClient } from '@intron-voice-node';
+import { IntronClient } from 'intron-voice-node';
 
 const client = new IntronClient({
   apiKey: requiredEnv('INTRON_API_KEY'),
@@ -77,7 +77,7 @@ import {
   INTRON_TTS_LANGUAGES,
   isKnownIntronSttLanguageCode,
   type IntronTtsVoiceConfiguration,
-} from '@intron-voice-node';
+} from 'intron-voice-node';
 ```
 
 The official documentation remains the source of truth:

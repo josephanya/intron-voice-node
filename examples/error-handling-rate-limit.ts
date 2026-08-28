@@ -2,7 +2,7 @@ import {
   IntronApiError,
   IntronClient,
   IntronRateLimitError,
-} from '@intron-voice-node';
+} from 'intron-voice-node';
 
 import { requiredEnv } from './env.js';
 
