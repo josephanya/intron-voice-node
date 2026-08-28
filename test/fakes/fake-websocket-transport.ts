@@ -1,4 +1,6 @@
 import type {
+  IntronClock,
+  IntronTimerHandle,
   IntronWebSocketConnection,
   IntronWebSocketEventMap,
   IntronWebSocketState,
@@ -72,8 +74,22 @@ export class FakeWebSocketTransport implements IntronWebSocketTransport {
     readonly headers?: Readonly<Record<string, string>>;
     readonly signal?: AbortSignal;
   }[] = [];
-  public readonly connection = new FakeWebSocketConnection();
+  public readonly connections: FakeWebSocketConnection[] = [
+    new FakeWebSocketConnection(),
+  ];
+  public readonly connectErrors: Error[] = [];
   private closed = false;
+
+  public get connection(): FakeWebSocketConnection {
+    return this.connections[0] ?? this.createConnection();
+  }
+
+  public createConnection(): FakeWebSocketConnection {
+    const connection = new FakeWebSocketConnection();
+    this.connections.push(connection);
+
+    return connection;
+  }
 
   public connect(options: {
     readonly url: URL;
@@ -86,7 +102,15 @@ export class FakeWebSocketTransport implements IntronWebSocketTransport {
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
 
-    return Promise.resolve(this.connection);
+    const connectError = this.connectErrors.shift();
+
+    if (connectError !== undefined) {
+      return Promise.reject(connectError);
+    }
+
+    return Promise.resolve(
+      this.connections[this.connects.length - 1] ?? this.createConnection(),
+    );
   }
 
   public close(): Promise<void> {
@@ -97,5 +121,44 @@ export class FakeWebSocketTransport implements IntronWebSocketTransport {
 
   public isClosed(): boolean {
     return this.closed;
+  }
+}
+
+export class FakeClock implements IntronClock {
+  private readonly timers: {
+    readonly dueAt: number;
+    readonly callback: () => void;
+    cleared: boolean;
+  }[] = [];
+  private currentTime = 0;
+
+  public now(): number {
+    return this.currentTime;
+  }
+
+  public setTimeout(callback: () => void, delayMs: number): IntronTimerHandle {
+    const timer = {
+      dueAt: this.currentTime + delayMs,
+      callback,
+      cleared: false,
+    };
+    this.timers.push(timer);
+
+    return {
+      clear: () => {
+        timer.cleared = true;
+      },
+    };
+  }
+
+  public advanceBy(delayMs: number): void {
+    this.currentTime += delayMs;
+
+    for (const timer of this.timers) {
+      if (!timer.cleared && timer.dueAt <= this.currentTime) {
+        timer.cleared = true;
+        timer.callback();
+      }
+    }
   }
 }

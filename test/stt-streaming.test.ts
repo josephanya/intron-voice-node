@@ -8,7 +8,10 @@ import {
   SttSessionState,
   type SttStreamingEvent,
 } from '../src/index.js';
-import { FakeWebSocketTransport } from './fakes/fake-websocket-transport.js';
+import {
+  FakeClock,
+  FakeWebSocketTransport,
+} from './fakes/fake-websocket-transport.js';
 
 const CHUNK = new Uint8Array(1024).fill(7);
 
@@ -290,6 +293,212 @@ describe('STT websocket streaming transcription', () => {
     });
     expect(websocketTransport.connection.sent).toEqual([]);
   });
+
+  it('rolls over before the session time limit and increments session indexes', async () => {
+    const clock = new FakeClock();
+    const websocketTransport = new FakeWebSocketTransport();
+    const source = pushableAsyncIterable();
+    const client = new IntronClient({
+      apiKey: 'server-key',
+      websocketTransport,
+      clock,
+    });
+    const session = await client.startStreamingTranscription({
+      audio: source,
+      rolloverIntervalMs: 270_000,
+    });
+
+    websocketTransport.connection.emit(
+      'message',
+      JSON.stringify({ message_type: 'SESSION_CREATED', session_id: 's-1' }),
+    );
+    source.push(CHUNK);
+    await settle();
+
+    clock.advanceBy(269_999);
+    await settle();
+    expect(websocketTransport.connects).toHaveLength(1);
+
+    clock.advanceBy(1);
+    await settle();
+
+    expect(websocketTransport.connects).toHaveLength(2);
+    expect(
+      parseSentJson(websocketTransport.connections[0]?.sent.at(-1)),
+    ).toEqual({
+      message_type: 'COMMIT',
+    });
+    expect(
+      websocketTransport.connections[0]?.handlerCounts.get('message'),
+    ).toBe(0);
+    expect(
+      websocketTransport.connections[1]?.handlerCounts.get('message'),
+    ).toBe(1);
+
+    websocketTransport.connections[1]?.emit(
+      'message',
+      JSON.stringify({ message_type: 'SESSION_CREATED', session_id: 's-2' }),
+    );
+    await settle();
+
+    expect(session.sessionIndex).toBe(1);
+    await session.close();
+  });
+
+  it('buffers pending audio during reconnect and preserves transcript ordering', async () => {
+    const clock = new FakeClock();
+    const websocketTransport = new FakeWebSocketTransport();
+    const source = pushableAsyncIterable();
+    const client = new IntronClient({
+      apiKey: 'server-key',
+      websocketTransport,
+      clock,
+    });
+    const session = await client.startStreamingTranscription({
+      audio: source,
+      rolloverIntervalMs: 10,
+      maxReconnectBufferBytes: 2048,
+    });
+    const transcripts = session.transcriptEvents[Symbol.asyncIterator]();
+
+    websocketTransport.connection.emit(
+      'message',
+      JSON.stringify({ message_type: 'SESSION_CREATED', session_id: 's-1' }),
+    );
+    websocketTransport.connection.emit(
+      'message',
+      JSON.stringify({
+        message_type: 'COMMITTED_TRANSCRIPT',
+        transcript: 'first',
+      }),
+    );
+    clock.advanceBy(10);
+    await settle();
+    source.push(new Uint8Array(1024).fill(3));
+    await settle();
+
+    expect(websocketTransport.connections[1]?.sent).toEqual([]);
+
+    websocketTransport.connections[1]?.emit(
+      'message',
+      JSON.stringify({ message_type: 'SESSION_CREATED', session_id: 's-2' }),
+    );
+    websocketTransport.connections[1]?.emit(
+      'message',
+      JSON.stringify({
+        message_type: 'COMMITTED_TRANSCRIPT',
+        transcript: 'second',
+      }),
+    );
+    await settle();
+
+    expect(
+      parseSentJson(websocketTransport.connections[1]?.sent[0]),
+    ).toMatchObject({
+      message_type: 'INPUT_AUDIO_CHUNK',
+      ack_id: 1,
+    });
+    await expect(transcripts.next()).resolves.toMatchObject({
+      done: false,
+      value: { transcript: 'first', sessionIndex: 0 },
+    });
+    await expect(transcripts.next()).resolves.toMatchObject({
+      done: false,
+      value: { transcript: 'second', sessionIndex: 1 },
+    });
+    await session.close();
+  });
+
+  it('handles idle socket closure by reconnecting cleanly', async () => {
+    const clock = new FakeClock();
+    const websocketTransport = new FakeWebSocketTransport();
+    const client = new IntronClient({
+      apiKey: 'server-key',
+      websocketTransport,
+      clock,
+    });
+    const session = await client.startStreamingTranscription({
+      audio: pushableAsyncIterable(),
+    });
+
+    await websocketTransport.connection.close(1000, 'idle timeout');
+    await settle();
+
+    expect(websocketTransport.connects).toHaveLength(2);
+    expect(session.state).toBe(SttSessionState.Connecting);
+    await session.close();
+  });
+
+  it('emits a typed transport error when reconnect attempts are exhausted', async () => {
+    const clock = new FakeClock();
+    const websocketTransport = new FakeWebSocketTransport();
+    const client = new IntronClient({
+      apiKey: 'server-key',
+      websocketTransport,
+      clock,
+    });
+    const session = await client.startStreamingTranscription({
+      audio: pushableAsyncIterable(),
+      maxReconnectAttempts: 1,
+    });
+    websocketTransport.connectErrors.push(new Error('reconnect failed'));
+    const events = session.events[Symbol.asyncIterator]();
+
+    websocketTransport.connection.emit('error', new Error('socket broke'));
+    await settle();
+
+    await expect(events.next()).resolves.toMatchObject({
+      done: false,
+      value: { type: 'reconnecting', attempt: 1 },
+    });
+    await expect(events.next()).resolves.toMatchObject({
+      done: false,
+      value: { type: 'transport_error' },
+    });
+    expect(session.state).toBe(SttSessionState.Failed);
+  });
+
+  it('cancels safely during reconnect and does not reconnect after explicit close', async () => {
+    const clock = new FakeClock();
+    const websocketTransport = new FakeWebSocketTransport();
+    const controller = new AbortController();
+    const client = new IntronClient({
+      apiKey: 'server-key',
+      websocketTransport,
+      clock,
+    });
+    const session = await client.startStreamingTranscription({
+      audio: pushableAsyncIterable(),
+      signal: controller.signal,
+      rolloverIntervalMs: 10,
+    });
+
+    clock.advanceBy(10);
+    controller.abort();
+    await settle();
+
+    expect(session.state).toBe(SttSessionState.Cancelled);
+    const connectsAfterCancel = websocketTransport.connects.length;
+    clock.advanceBy(10_000);
+    await settle();
+    expect(websocketTransport.connects).toHaveLength(connectsAfterCancel);
+
+    const secondTransport = new FakeWebSocketTransport();
+    const secondClient = new IntronClient({
+      apiKey: 'server-key',
+      websocketTransport: secondTransport,
+      clock,
+    });
+    const secondSession = await secondClient.startStreamingTranscription({
+      audio: pushableAsyncIterable(),
+      rolloverIntervalMs: 10,
+    });
+    await secondSession.close();
+    clock.advanceBy(10_000);
+    await settle();
+
+    expect(secondTransport.connects).toHaveLength(1);
+  });
 });
 
 function parseSentJson(value: string | Uint8Array | undefined): unknown {
@@ -339,5 +548,38 @@ function trackedAsyncIterable(
         },
       };
     },
+  };
+}
+
+function pushableAsyncIterable(): AsyncIterable<Uint8Array> & {
+  readonly push: (chunk: Uint8Array) => void;
+} {
+  const chunks: Uint8Array[] = [];
+  const waiters: ((result: IteratorResult<Uint8Array>) => void)[] = [];
+
+  return {
+    push: (chunk) => {
+      const waiter = waiters.shift();
+
+      if (waiter === undefined) {
+        chunks.push(chunk);
+        return;
+      }
+
+      waiter({ done: false, value: chunk });
+    },
+    [Symbol.asyncIterator]: () => ({
+      next: () => {
+        const chunk = chunks.shift();
+
+        if (chunk !== undefined) {
+          return Promise.resolve({ done: false, value: chunk });
+        }
+
+        return new Promise<IteratorResult<Uint8Array>>((resolve) => {
+          waiters.push(resolve);
+        });
+      },
+    }),
   };
 }

@@ -4,6 +4,8 @@ All notable changes to this package will be documented in this file.
 
 ## 0.0.0
 
+- Added streaming STT rollover and reconnect lifecycle handling with bounded
+  audio buffering, backoff limits, reconnect events, and session indexes.
 - Added WebSocket STT streaming with typed events, transcript iterators,
   sequential audio acknowledgements, chunk validation, cancellation, and a
   default `ws` transport.

@@ -177,6 +177,16 @@ export interface SttStreamingOptions {
   readonly language?: string;
   /** Optional cancellation signal. */
   readonly signal?: AbortSignal;
+  /** Rollover interval in milliseconds. Defaults to 270000. */
+  readonly rolloverIntervalMs?: number;
+  /** Maximum audio bytes buffered while reconnecting. Defaults to 1048576. */
+  readonly maxReconnectBufferBytes?: number;
+  /** Maximum reconnect attempts for one interruption. Defaults to 3. */
+  readonly maxReconnectAttempts?: number;
+  /** Initial reconnect backoff delay in milliseconds. Defaults to 250. */
+  readonly reconnectInitialDelayMs?: number;
+  /** Maximum reconnect backoff delay in milliseconds. Defaults to 5000. */
+  readonly reconnectMaxDelayMs?: number;
 }
 
 /** Documented STT streaming server message types. */
@@ -201,12 +211,14 @@ export type SttTranscriptEvent =
   | {
       readonly type: 'partial_transcript';
       readonly messageType: 'PARTIAL_TRANSCRIPT';
+      readonly sessionIndex: number;
       readonly transcript: string;
       readonly raw: unknown;
     }
   | {
       readonly type: 'committed_transcript';
       readonly messageType: 'COMMITTED_TRANSCRIPT';
+      readonly sessionIndex: number;
       readonly transcript: string;
       readonly raw: unknown;
     };
@@ -216,12 +228,14 @@ export type SttStreamingEvent =
   | {
       readonly type: 'session_created';
       readonly messageType: 'SESSION_CREATED';
+      readonly sessionIndex: number;
       readonly sessionId?: string;
       readonly raw: unknown;
     }
   | {
       readonly type: 'audio_chunk_ack';
       readonly messageType: 'AUDIO_CHUCK_ACK';
+      readonly sessionIndex: number;
       readonly ackId?: number;
       readonly raw: unknown;
     }
@@ -235,6 +249,7 @@ export type SttStreamingEvent =
         | 'PARTIAL_TRANSCRIPT'
         | 'COMMITTED_TRANSCRIPT'
       >;
+      readonly sessionIndex: number;
       readonly error: Error;
       readonly raw: unknown;
     }
@@ -243,9 +258,21 @@ export type SttStreamingEvent =
       readonly error: Error;
       readonly raw?: unknown;
     }
+  | {
+      readonly type: 'reconnecting';
+      readonly reason:
+        | 'rollover'
+        | 'transport_close'
+        | 'transport_error'
+        | 'session_time_limit';
+      readonly sessionIndex: number;
+      readonly nextSessionIndex: number;
+      readonly attempt: number;
+    }
   | { readonly type: 'transport_error'; readonly error: Error }
   | {
       readonly type: 'closed';
+      readonly sessionIndex: number;
       readonly code?: number;
       readonly reason?: string;
     };
@@ -258,6 +285,8 @@ export interface SttStreamingSession extends AsyncDisposable {
   readonly transcriptEvents: AsyncIterable<SttTranscriptEvent>;
   /** Current lifecycle state. */
   readonly state: SttSessionState;
+  /** Zero-based index of the active streaming WebSocket session. */
+  readonly sessionIndex: number;
   /** Commits pending audio and closes the socket. */
   close(): Promise<void>;
 }

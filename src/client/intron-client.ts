@@ -267,12 +267,35 @@ export class IntronClient {
       headers: { authorization },
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
+    const connect = () =>
+      this.websocketTransport.connect({
+        url: createSttStreamingUrl(this.config.websocketBaseUrl, options),
+        headers: { authorization },
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+      });
 
     return createSttStreamingSession({
       connection,
+      connect,
+      clock: this.clock,
       audio: options.audio,
       ...(options.channels === undefined ? {} : { channels: options.channels }),
       ...(options.signal === undefined ? {} : { signal: options.signal }),
+      ...(options.rolloverIntervalMs === undefined
+        ? {}
+        : { rolloverIntervalMs: options.rolloverIntervalMs }),
+      ...(options.maxReconnectBufferBytes === undefined
+        ? {}
+        : { maxReconnectBufferBytes: options.maxReconnectBufferBytes }),
+      ...(options.maxReconnectAttempts === undefined
+        ? {}
+        : { maxReconnectAttempts: options.maxReconnectAttempts }),
+      ...(options.reconnectInitialDelayMs === undefined
+        ? {}
+        : { reconnectInitialDelayMs: options.reconnectInitialDelayMs }),
+      ...(options.reconnectMaxDelayMs === undefined
+        ? {}
+        : { reconnectMaxDelayMs: options.reconnectMaxDelayMs }),
     });
   }
 

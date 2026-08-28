@@ -21,6 +21,9 @@ sync endpoint.
 
 Phase 5 adds WebSocket streaming transcription for PCM16 little-endian audio.
 
+Phase 6 adds streaming rollover and reconnect lifecycle handling for long-lived
+audio streams.
+
 ## Requirements
 
 - Node.js 20 or newer
@@ -124,6 +127,21 @@ Web `ReadableStream<Uint8Array>`. Chunks must contain complete PCM16 sample
 frames and be between 1 KB and 32 KB. Audio read before `SESSION_CREATED` is
 held at the current chunk boundary, so the SDK never sends early audio or keeps
 an unbounded pre-session buffer.
+
+Streaming sessions automatically roll over before the service's 300 second
+session limit. The default rollover interval is 270 seconds: the SDK commits the
+current session, opens the next WebSocket, increments `session.sessionIndex`, and
+continues sending audio. Lifecycle events include the zero-based `sessionIndex`,
+and reconnect attempts emit `reconnecting` with the current and next session
+indexes. If the service closes an idle stream after the documented 60 second
+audio gap, the SDK treats that close as reconnectable rather than terminal.
+
+Audio produced while a rollover or reconnect is in progress is kept in a bounded
+buffer. Defaults are 1 MiB of queued audio, 3 reconnect attempts, 250 ms initial
+backoff, and 5 seconds maximum backoff. Override these with
+`maxReconnectBufferBytes`, `maxReconnectAttempts`, `reconnectInitialDelayMs`,
+and `reconnectMaxDelayMs` when your audio producer needs different failure or
+latency tradeoffs.
 
 Supported upload sources include local paths, `Uint8Array` buffers, Node.js
 `Readable` streams, and `AsyncIterable<Uint8Array>` chunks. Supported file
