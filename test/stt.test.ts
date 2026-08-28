@@ -6,6 +6,7 @@ import {
   IntronClient,
   IntronProtocolError,
   IntronRequestCancelledError,
+  SttSyncTranscriptionUnavailableError,
   type IntronClock,
   type IntronTimerHandle,
 } from '../src/index.js';
@@ -328,6 +329,193 @@ describe('asynchronous STT file transcription', () => {
     });
     expect(httpTransport.requests).toHaveLength(2);
     expect(clock.delays).toEqual([1000]);
+  });
+});
+
+describe('synchronous STT file transcription', () => {
+  it('uploads audio to the synchronous endpoint and returns the transcript', async () => {
+    const httpTransport = new FakeHttpTransport();
+    httpTransport.enqueueResponse(
+      jsonResponse(
+        {
+          data: {
+            file_id: 'file-sync-1',
+            processing_status: 'FILE_TRANSCRIBED',
+            audio_file_name: 'consult.wav',
+            audio_transcript: 'hello world',
+            processed_audio_duration_in_seconds: 20,
+          },
+          message: 'file status found',
+          status: 'Ok',
+        },
+        200,
+        { 'x-request-id': 'request-sync-1' },
+      ),
+    );
+    const client = new IntronClient({ apiKey: 'server-key', httpTransport });
+
+    await expect(
+      client.transcribeAudioFileSync({
+        source: {
+          kind: 'buffer',
+          filename: 'consult.wav',
+          data: new Uint8Array([1, 2, 3]),
+          contentType: 'audio/wav',
+        },
+        audioDurationSeconds: 20,
+      }),
+    ).resolves.toEqual({
+      fileId: 'file-sync-1',
+      status: 'FILE_TRANSCRIBED',
+      audioFileName: 'consult.wav',
+      transcript: 'hello world',
+      processedDuration: 20,
+      request: { status: 200, requestId: 'request-sync-1' },
+      raw: {
+        data: {
+          file_id: 'file-sync-1',
+          processing_status: 'FILE_TRANSCRIBED',
+          audio_file_name: 'consult.wav',
+          audio_transcript: 'hello world',
+          processed_audio_duration_in_seconds: 20,
+        },
+        message: 'file status found',
+        status: 'Ok',
+      },
+    });
+
+    expect(httpTransport.requests).toHaveLength(1);
+    const request = httpTransport.requests[0];
+    expect(request?.method).toBe('POST');
+    expect(request?.url.toString()).toBe(
+      'https://infer.voice.intron.io/file/v1/upload/sync',
+    );
+    expect(request?.headers.authorization).toBe('Bearer server-key');
+    expect(request?.body).toBeInstanceOf(FormData);
+  });
+
+  it('preserves the file ID when synchronous processing returns a 503', async () => {
+    const httpTransport = new FakeHttpTransport();
+    httpTransport.enqueueResponse(
+      jsonResponse(
+        {
+          data: {
+            file_id: 'file-sync-timeout',
+            processing_status: 'FILE_PROCESSING',
+          },
+        },
+        503,
+        { 'retry-after': '3', 'x-request-id': 'request-sync-timeout' },
+      ),
+    );
+    const client = new IntronClient({ apiKey: 'server-key', httpTransport });
+
+    const pending = client.transcribeAudioFileSync({
+      source: {
+        kind: 'buffer',
+        filename: 'consult.mp3',
+        data: new Uint8Array([1]),
+      },
+    });
+
+    await expect(pending).rejects.toBeInstanceOf(
+      SttSyncTranscriptionUnavailableError,
+    );
+    await expect(pending).rejects.toMatchObject({
+      fileId: 'file-sync-timeout',
+      job: {
+        fileId: 'file-sync-timeout',
+        status: 'FILE_PROCESSING',
+        request: { status: 503, requestId: 'request-sync-timeout' },
+      },
+      retryAfter: 3,
+      retryable: true,
+      status: 503,
+    });
+  });
+
+  it('rejects invalid synchronous duration metadata before upload', async () => {
+    const httpTransport = new FakeHttpTransport();
+    const client = new IntronClient({ apiKey: 'server-key', httpTransport });
+
+    await expect(
+      client.transcribeAudioFileSync({
+        source: {
+          kind: 'buffer',
+          filename: 'too-long.wav',
+          data: new Uint8Array([1]),
+        },
+        audioDurationSeconds: 121,
+      }),
+    ).rejects.toBeInstanceOf(IntronProtocolError);
+    await expect(
+      client.transcribeAudioFileSync({
+        source: {
+          kind: 'buffer',
+          filename: 'invalid.wav',
+          data: new Uint8Array([1]),
+        },
+        audioDurationSeconds: Number.NaN,
+      }),
+    ).rejects.toBeInstanceOf(IntronProtocolError);
+    expect(httpTransport.requests).toHaveLength(0);
+  });
+
+  it('sends language and diarization options in the synchronous multipart body', async () => {
+    const httpTransport = new FakeHttpTransport();
+    httpTransport.enqueueResponse(
+      jsonResponse({
+        data: {
+          file_id: 'file-sync-1',
+          processing_status: 'FILE_TRANSCRIBED',
+          audio_transcript: 'done',
+        },
+      }),
+    );
+    const client = new IntronClient({ apiKey: 'server-key', httpTransport });
+
+    await client.transcribeAudioFileSync({
+      source: {
+        kind: 'buffer',
+        filename: 'consult.m4a',
+        data: new Uint8Array([1, 2]),
+      },
+      language: 'tw',
+      diarization: false,
+      templateId: 'template-1',
+      category: 'file_category_call_center',
+      disableLlmCorrections: true,
+      postProcessing: { summary: false, answer: true },
+    });
+
+    const formData = httpTransport.requests[0]?.body as FormData;
+    expect(formData.get('audio_file_name')).toBe('consult.m4a');
+    expect(formData.get('audio_file_blob')).toBeInstanceOf(File);
+    expect(formData.get('use_language_asr_input')).toBe('tw');
+    expect(formData.get('use_diarization')).toBe('FALSE');
+    expect(formData.get('use_template_id')).toBe('template-1');
+    expect(formData.get('use_category')).toBe('file_category_call_center');
+    expect(formData.get('use_disable_llm_corrections')).toBe('TRUE');
+    expect(formData.get('get_summary')).toBe('FALSE');
+    expect(formData.get('get_answer')).toBe('TRUE');
+  });
+
+  it('supports aborting synchronous uploads before the request is sent', async () => {
+    const httpTransport = new FakeHttpTransport();
+    const controller = new AbortController();
+    const client = new IntronClient({ apiKey: 'server-key', httpTransport });
+    controller.abort();
+
+    await expect(
+      client.transcribeAudioFileSync({
+        source: {
+          kind: 'buffer',
+          filename: 'consult.ogg',
+          data: new Uint8Array([1]),
+        },
+        signal: controller.signal,
+      }),
+    ).rejects.toBeInstanceOf(IntronRequestCancelledError);
   });
 });
 

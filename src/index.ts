@@ -28,8 +28,10 @@ export {
   isTerminalSttStatus,
   parseSttJob,
   parseSttJobStatus,
+  SttSyncTranscriptionUnavailableError,
   toSttResult,
   validateAudioFilename,
+  validateSyncUploadOptions,
 } from './stt/files.js';
 export type {
   SttFileCategory,
@@ -40,6 +42,7 @@ export type {
   SttProcessingStatus,
   SttRequestMetadata,
   SttResult,
+  SttSyncUploadOptions,
   SttUploadOptions,
   WaitForTranscriptionOptions,
 } from './stt/types.js';

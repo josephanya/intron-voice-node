@@ -61,6 +61,19 @@ export interface SttUploadOptions {
 }
 
 /**
+ * Options for synchronous STT file transcription.
+ */
+export interface SttSyncUploadOptions extends SttUploadOptions {
+  /**
+   * Caller-provided audio duration metadata in seconds.
+   *
+   * The synchronous endpoint only supports audio of 120 seconds or less. The SDK
+   * validates this field when provided; it does not measure audio duration.
+   */
+  readonly audioDurationSeconds?: number;
+}
+
+/**
  * Safe request metadata preserved from STT operations.
  */
 export interface SttRequestMetadata {

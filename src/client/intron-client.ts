@@ -6,6 +6,7 @@ import {
   IntronProtocolError,
   createIntronHttpError,
   createIntronTransportError,
+  parseRetryAfter,
 } from '../errors/index.js';
 import type {
   IntronClock,
@@ -21,7 +22,9 @@ import {
   isTerminalSttStatus,
   parseSttJob,
   parseSttJobStatus,
+  SttSyncTranscriptionUnavailableError,
   toSttResult,
+  validateSyncUploadOptions,
 } from '../stt/files.js';
 import type {
   SttFileStatusOptions,
@@ -29,6 +32,7 @@ import type {
   SttJobStatus,
   SttRequestMetadata,
   SttResult,
+  SttSyncUploadOptions,
   SttUploadOptions,
   WaitForTranscriptionOptions,
 } from '../stt/types.js';
@@ -62,6 +66,10 @@ interface IntronParsedHttpResponse<ResponseBody> {
   readonly status: number;
   readonly headers: Headers;
   readonly body: ResponseBody;
+}
+
+interface IntronResponseOptions {
+  readonly isSuccessfulStatus?: (status: number) => boolean;
 }
 
 /**
@@ -191,6 +199,46 @@ export class IntronClient {
   }
 
   /**
+   * Uploads an audio file for synchronous transcription.
+   *
+   * @param options - Synchronous upload options.
+   */
+  public async transcribeAudioFileSync(
+    options: SttSyncUploadOptions,
+  ): Promise<SttResult> {
+    validateSyncUploadOptions(options);
+    const response = await this.requestMultipartResponse<unknown>(
+      {
+        method: 'POST',
+        path: '/file/v1/upload/sync',
+        formData: await createSttUploadFormData(options),
+        operation: 'stt.transcribeAudioFileSync',
+        retry: options.retry ?? false,
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+      },
+      {
+        isSuccessfulStatus: (status) =>
+          (status >= 200 && status < 300) || status === 503,
+      },
+    );
+    const status = parseSttJobStatus(
+      response.body,
+      createRequestMetadata(response),
+    );
+
+    if (response.status === 503) {
+      const retryAfter = parseRetryAfter(response.headers.get('retry-after'));
+
+      throw new SttSyncTranscriptionUnavailableError({
+        job: status,
+        ...(retryAfter === undefined ? {} : { retryAfter }),
+      });
+    }
+
+    return toSttResult(status);
+  }
+
+  /**
    * Gets the status and result fields for an asynchronous transcription job.
    *
    * @param fileId - File identifier returned by {@link uploadAudioFile}.
@@ -263,6 +311,7 @@ export class IntronClient {
 
   private async requestJsonResponse<ResponseBody>(
     options: IntronJsonRequestOptions,
+    responseOptions: IntronResponseOptions = {},
   ): Promise<IntronParsedHttpResponse<ResponseBody>> {
     const body =
       options.json === undefined
@@ -272,6 +321,7 @@ export class IntronClient {
       options,
       accept: 'application/json',
       ...(body === undefined ? {} : { body, contentType: JSON_CONTENT_TYPE }),
+      ...responseOptions,
     });
 
     if (response.body.length === 0) {
@@ -315,11 +365,13 @@ export class IntronClient {
 
   private async requestMultipartResponse<ResponseBody>(
     options: IntronMultipartRequestOptions,
+    responseOptions: IntronResponseOptions = {},
   ): Promise<IntronParsedHttpResponse<ResponseBody>> {
     const response = await this.sendHttpRequest({
       options,
       body: options.formData,
       accept: 'application/json',
+      ...responseOptions,
     });
 
     if (response.body.length === 0) {
@@ -418,6 +470,7 @@ export class IntronClient {
     readonly body?: IntronHttpRequest['body'];
     readonly contentType?: string;
     readonly accept?: string;
+    readonly isSuccessfulStatus?: (status: number) => boolean;
   }) {
     const method = options.options.method ?? 'GET';
     const retryOptions = normalizeRequestRetry(method, options.options.retry);
@@ -434,7 +487,7 @@ export class IntronClient {
           method,
         });
 
-        if (response.status >= 200 && response.status < 300) {
+        if (isSuccessfulStatus(response.status, options.isSuccessfulStatus)) {
           return response;
         }
 
@@ -492,9 +545,11 @@ export class IntronClient {
     });
 
     try {
+      throwIfRequestAborted(signal.signal, options.options.operation);
       const authorization = await this.resolveAuthorizationHeader({
         signal: signal.signal,
       });
+      throwIfRequestAborted(signal.signal, options.options.operation);
       const headers = {
         ...(options.accept === undefined ? {} : { accept: options.accept }),
         ...(options.contentType === undefined
@@ -663,6 +718,13 @@ function canRetryError(
   return enabled && error.retryable && attempt < maxRetries;
 }
 
+function isSuccessfulStatus(
+  status: number,
+  predicate: ((status: number) => boolean) | undefined,
+): boolean {
+  return predicate?.(status) ?? (status >= 200 && status < 300);
+}
+
 function computeBackoffDelay(
   policy: IntronResolvedClientConfig['retryPolicy'],
   attempt: number,
@@ -773,6 +835,19 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
       signal.reason ??
         new DOMException('Intron request was cancelled.', 'AbortError'),
       'stt.waitForTranscription',
+    );
+  }
+}
+
+function throwIfRequestAborted(
+  signal: AbortSignal,
+  operation: string | undefined,
+): void {
+  if (signal.aborted) {
+    throw createIntronTransportError(
+      signal.reason ??
+        new DOMException('Intron request was cancelled.', 'AbortError'),
+      operation,
     );
   }
 }

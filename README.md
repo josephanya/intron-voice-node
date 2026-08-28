@@ -16,6 +16,9 @@ helpers, configurable retry policy, timeout propagation, and a default
 Phase 3 adds asynchronous file transcription helpers for upload, status checks,
 and polling until a transcription reaches a terminal state.
 
+Phase 4 adds synchronous file transcription for audio clips supported by the
+sync endpoint.
+
 ## Requirements
 
 - Node.js 20 or newer
@@ -74,6 +77,23 @@ const result = await client.waitForTranscription({
 
 console.log(result.transcript);
 ```
+
+For short audio, submit a synchronous transcription request:
+
+```ts
+const result = await client.transcribeAudioFileSync({
+  source: { kind: 'path', path: './brief-note.wav' },
+  audioDurationSeconds: 45,
+  language: 'en',
+  diarization: true,
+});
+
+console.log(result.transcript);
+```
+
+The synchronous endpoint supports audio up to 120 seconds. When
+`audioDurationSeconds` is provided, the SDK validates that metadata before
+uploading; it does not measure the file duration.
 
 Supported upload sources include local paths, `Uint8Array` buffers, Node.js
 `Readable` streams, and `AsyncIterable<Uint8Array>` chunks. Supported file

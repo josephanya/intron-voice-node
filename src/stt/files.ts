@@ -1,7 +1,7 @@
 import { openAsBlob } from 'node:fs';
 import { basename, extname } from 'node:path';
 
-import { IntronProtocolError } from '../errors/index.js';
+import { IntronApiError, IntronProtocolError } from '../errors/index.js';
 import type { IntronFileUploadSource } from '../transport/index.js';
 import type {
   SttJob,
@@ -9,6 +9,7 @@ import type {
   SttProcessingStatus,
   SttRequestMetadata,
   SttResult,
+  SttSyncUploadOptions,
   SttUploadOptions,
 } from './types.js';
 
@@ -22,11 +23,48 @@ const SUPPORTED_AUDIO_EXTENSIONS = new Set([
   '.flac',
 ]);
 const DEFAULT_STREAM_BUFFER_LIMIT_BYTES = 25 * 1024 * 1024;
+const MAX_SYNC_AUDIO_DURATION_SECONDS = 120;
 const TERMINAL_SUCCESS_STATUS = 'FILE_TRANSCRIBED';
 const TERMINAL_FAILURE_STATUS = 'FILE_PROCESSING_FAILED';
 
 /**
- * Creates the documented multipart body for asynchronous STT upload.
+ * Error raised when synchronous transcription times out but returns a file ID.
+ */
+export class SttSyncTranscriptionUnavailableError extends IntronApiError {
+  /** File identifier that can be used with the asynchronous status endpoint. */
+  public readonly fileId: string;
+  /** Parsed status payload returned by the synchronous endpoint. */
+  public readonly job: SttJobStatus;
+
+  /**
+   * Creates a sync fallback error with the file ID preserved.
+   *
+   * @param options - Parsed job payload and retry metadata.
+   */
+  public constructor(options: {
+    readonly job: SttJobStatus;
+    readonly retryAfter?: number;
+  }) {
+    super({
+      message:
+        'Intron synchronous transcription timed out; use fileId with getFileStatus or waitForTranscription.',
+      status: 503,
+      retryable: true,
+      operation: 'stt.transcribeAudioFileSync',
+      ...(options.retryAfter === undefined
+        ? {}
+        : { retryAfter: options.retryAfter }),
+      ...(options.job.request.requestId === undefined
+        ? {}
+        : { requestId: options.job.request.requestId }),
+    });
+    this.fileId = options.job.fileId;
+    this.job = options.job;
+  }
+}
+
+/**
+ * Creates the documented multipart body for STT file upload.
  *
  * @param options - STT upload options.
  */
@@ -62,6 +100,34 @@ export async function createSttUploadFormData(
   }
 
   return formData;
+}
+
+/**
+ * Validates caller-provided synchronous endpoint duration metadata.
+ *
+ * @param options - Synchronous upload options.
+ */
+export function validateSyncUploadOptions(options: SttSyncUploadOptions): void {
+  const duration = options.audioDurationSeconds;
+
+  if (duration === undefined) {
+    return;
+  }
+
+  if (!Number.isFinite(duration) || duration < 0) {
+    throw new IntronProtocolError({
+      message: 'Audio duration metadata must be a finite non-negative number.',
+      operation: 'stt.validateSyncAudioFile',
+    });
+  }
+
+  if (duration > MAX_SYNC_AUDIO_DURATION_SECONDS) {
+    throw new IntronProtocolError({
+      message:
+        'The synchronous STT endpoint only supports audio of 120 seconds or less.',
+      operation: 'stt.validateSyncAudioFile',
+    });
+  }
 }
 
 /**
@@ -114,13 +180,20 @@ export function parseSttJobStatus(
 ): SttJobStatus {
   const fields = getResponseFields(value);
   const job = parseSttJob(value, request);
-  const transcript = readString(fields, 'transcript', 'text', 'transcription');
+  const transcript = readString(
+    fields,
+    'transcript',
+    'text',
+    'transcription',
+    'audio_transcript',
+  );
   const processedDuration = readNumber(
     fields,
     'processed_duration',
     'processedDuration',
     'audio_duration',
     'duration',
+    'processed_audio_duration_in_seconds',
   );
   const postProcessing = readFirstDefined(
     fields,
@@ -270,7 +343,13 @@ function appendBooleanField(
 
 function getResponseFields(value: unknown): Record<string, unknown> {
   if (value !== null && typeof value === 'object') {
-    return value as Record<string, unknown>;
+    const fields = value as Record<string, unknown>;
+
+    if (fields.data !== null && typeof fields.data === 'object') {
+      return fields.data as Record<string, unknown>;
+    }
+
+    return fields;
   }
 
   throw new IntronProtocolError({
