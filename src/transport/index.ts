@@ -236,7 +236,24 @@ export interface IntronStreamUploadSource {
 }
 
 /**
+ * File upload source backed by an async iterable of byte chunks.
+ */
+export interface IntronAsyncIterableUploadSource {
+  /** Upload source kind. */
+  readonly kind: 'asyncIterable';
+  /** File content chunks. */
+  readonly data: AsyncIterable<Uint8Array>;
+  /** Filename sent to the service. */
+  readonly filename: string;
+  /** Optional content type sent to the service. */
+  readonly contentType?: string;
+}
+
+/**
  * Supported file upload sources for SDK multipart operations.
  */
 export type IntronFileUploadSource =
-  IntronPathUploadSource | IntronBufferUploadSource | IntronStreamUploadSource;
+  | IntronPathUploadSource
+  | IntronBufferUploadSource
+  | IntronStreamUploadSource
+  | IntronAsyncIterableUploadSource;

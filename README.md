@@ -13,6 +13,9 @@ Phase 2 adds the shared authenticated HTTP layer, JSON and multipart request
 helpers, configurable retry policy, timeout propagation, and a default
 `fetch`-based transport.
 
+Phase 3 adds asynchronous file transcription helpers for upload, status checks,
+and polling until a transcription reaches a terminal state.
+
 ## Requirements
 
 - Node.js 20 or newer
@@ -51,6 +54,30 @@ const client = new IntronClient({
 
 Keep API keys on trusted servers. Do not ship long-lived credentials to browser
 applications.
+
+Upload an audio file for asynchronous speech-to-text transcription and poll for
+the result:
+
+```ts
+const job = await client.uploadAudioFile({
+  source: { kind: 'path', path: './consultation.wav' },
+  language: 'en',
+  diarization: true,
+});
+
+const result = await client.waitForTranscription({
+  fileId: job.fileId,
+  pollingIntervalMs: 2000,
+  timeoutMs: 15 * 60 * 1000,
+  structuredPostProcessing: true,
+});
+
+console.log(result.transcript);
+```
+
+Supported upload sources include local paths, `Uint8Array` buffers, Node.js
+`Readable` streams, and `AsyncIterable<Uint8Array>` chunks. Supported file
+extensions are WAV, MP3, MP4, M4A, OGG, WebM, and FLAC.
 
 The low-level request helpers are intended for SDK operations and advanced
 server integrations:

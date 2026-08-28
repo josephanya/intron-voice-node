@@ -16,6 +16,22 @@ import {
   IntronFetchHttpTransport,
   IntronSystemClock,
 } from '../transport/index.js';
+import {
+  createSttUploadFormData,
+  isTerminalSttStatus,
+  parseSttJob,
+  parseSttJobStatus,
+  toSttResult,
+} from '../stt/files.js';
+import type {
+  SttFileStatusOptions,
+  SttJob,
+  SttJobStatus,
+  SttRequestMetadata,
+  SttResult,
+  SttUploadOptions,
+  WaitForTranscriptionOptions,
+} from '../stt/types.js';
 import type {
   IntronAuthOptions,
   IntronClientConfig,
@@ -40,6 +56,12 @@ const JSON_CONTENT_TYPE = 'application/json; charset=utf-8';
 interface IntronClientSecrets {
   readonly apiKey?: string;
   readonly tokenProvider?: IntronTokenProvider;
+}
+
+interface IntronParsedHttpResponse<ResponseBody> {
+  readonly status: number;
+  readonly headers: Headers;
+  readonly body: ResponseBody;
 }
 
 /**
@@ -136,6 +158,112 @@ export class IntronClient {
   public async requestJson<ResponseBody>(
     options: IntronJsonRequestOptions,
   ): Promise<ResponseBody> {
+    return (await this.requestJsonResponse<ResponseBody>(options)).body;
+  }
+
+  /**
+   * Sends an authenticated multipart REST request and parses a JSON response.
+   *
+   * @param options - Multipart request options.
+   */
+  public async requestMultipart<ResponseBody>(
+    options: IntronMultipartRequestOptions,
+  ): Promise<ResponseBody> {
+    return (await this.requestMultipartResponse<ResponseBody>(options)).body;
+  }
+
+  /**
+   * Uploads an audio file for asynchronous transcription.
+   *
+   * @param options - Upload options.
+   */
+  public async uploadAudioFile(options: SttUploadOptions): Promise<SttJob> {
+    const response = await this.requestMultipartResponse<unknown>({
+      method: 'POST',
+      path: '/file/v1/upload',
+      formData: await createSttUploadFormData(options),
+      operation: 'stt.uploadAudioFile',
+      retry: options.retry ?? false,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
+
+    return parseSttJob(response.body, createRequestMetadata(response));
+  }
+
+  /**
+   * Gets the status and result fields for an asynchronous transcription job.
+   *
+   * @param fileId - File identifier returned by {@link uploadAudioFile}.
+   * @param options - Optional status request controls.
+   */
+  public async getFileStatus(
+    fileId: string,
+    options: SttFileStatusOptions = {},
+  ): Promise<SttJobStatus> {
+    const response = await this.requestJsonResponse<unknown>({
+      method: 'GET',
+      path: `/file/v1/status/${encodeURIComponent(fileId)}`,
+      query: {
+        ...(options.structuredPostProcessing === undefined
+          ? {}
+          : {
+              get_structured_post_processing: options.structuredPostProcessing
+                ? 't'
+                : 'f',
+            }),
+      },
+      operation: 'stt.getFileStatus',
+      retry: options.retry ?? true,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
+
+    return parseSttJobStatus(response.body, createRequestMetadata(response));
+  }
+
+  /**
+   * Polls file status until transcription succeeds or fails.
+   *
+   * @param options - Polling controls.
+   */
+  public async waitForTranscription(
+    options: WaitForTranscriptionOptions,
+  ): Promise<SttResult> {
+    const startedAt = this.clock.now();
+    const pollingIntervalMs = options.pollingIntervalMs ?? 2_000;
+
+    for (;;) {
+      throwIfAborted(options.signal);
+
+      if (
+        options.timeoutMs !== undefined &&
+        this.clock.now() - startedAt > options.timeoutMs
+      ) {
+        throw new IntronProtocolError({
+          message: 'Timed out waiting for Intron STT transcription.',
+          operation: 'stt.waitForTranscription',
+        });
+      }
+
+      const status = await this.getFileStatus(options.fileId, {
+        ...(options.structuredPostProcessing === undefined
+          ? {}
+          : { structuredPostProcessing: options.structuredPostProcessing }),
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+        ...(options.retry === undefined ? {} : { retry: options.retry }),
+      });
+      options.onStatus?.(status);
+
+      if (isTerminalSttStatus(status.status)) {
+        return toSttResult(status);
+      }
+
+      await waitForDelay(this.clock, pollingIntervalMs, options.signal);
+    }
+  }
+
+  private async requestJsonResponse<ResponseBody>(
+    options: IntronJsonRequestOptions,
+  ): Promise<IntronParsedHttpResponse<ResponseBody>> {
     const body =
       options.json === undefined
         ? undefined
@@ -147,7 +275,11 @@ export class IntronClient {
     });
 
     if (response.body.length === 0) {
-      return undefined as ResponseBody;
+      return {
+        status: response.status,
+        headers: response.headers,
+        body: undefined as ResponseBody,
+      };
     }
 
     if (!isJsonContentType(response.headers.get('content-type'))) {
@@ -161,9 +293,13 @@ export class IntronClient {
     }
 
     try {
-      return JSON.parse(
-        new TextDecoder().decode(response.body),
-      ) as ResponseBody;
+      return {
+        status: response.status,
+        headers: response.headers,
+        body: JSON.parse(
+          new TextDecoder().decode(response.body),
+        ) as ResponseBody,
+      };
     } catch (cause) {
       throw createIntronHttpError({
         status: response.status,
@@ -177,14 +313,9 @@ export class IntronClient {
     }
   }
 
-  /**
-   * Sends an authenticated multipart REST request and parses a JSON response.
-   *
-   * @param options - Multipart request options.
-   */
-  public async requestMultipart<ResponseBody>(
+  private async requestMultipartResponse<ResponseBody>(
     options: IntronMultipartRequestOptions,
-  ): Promise<ResponseBody> {
+  ): Promise<IntronParsedHttpResponse<ResponseBody>> {
     const response = await this.sendHttpRequest({
       options,
       body: options.formData,
@@ -192,7 +323,11 @@ export class IntronClient {
     });
 
     if (response.body.length === 0) {
-      return undefined as ResponseBody;
+      return {
+        status: response.status,
+        headers: response.headers,
+        body: undefined as ResponseBody,
+      };
     }
 
     if (!isJsonContentType(response.headers.get('content-type'))) {
@@ -206,9 +341,13 @@ export class IntronClient {
     }
 
     try {
-      return JSON.parse(
-        new TextDecoder().decode(response.body),
-      ) as ResponseBody;
+      return {
+        status: response.status,
+        headers: response.headers,
+        body: JSON.parse(
+          new TextDecoder().decode(response.body),
+        ) as ResponseBody,
+      };
     } catch (cause) {
       throw createIntronHttpError({
         status: response.status,
@@ -611,4 +750,29 @@ function waitForDelay(
 
     signal?.addEventListener('abort', abortListener, { once: true });
   });
+}
+
+function createRequestMetadata(response: {
+  readonly status: number;
+  readonly headers: Headers;
+}): SttRequestMetadata {
+  const requestId =
+    response.headers.get('x-request-id') ??
+    response.headers.get('request-id') ??
+    undefined;
+
+  return {
+    status: response.status,
+    ...(requestId === undefined ? {} : { requestId }),
+  };
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted === true) {
+    throw createIntronTransportError(
+      signal.reason ??
+        new DOMException('Intron request was cancelled.', 'AbortError'),
+      'stt.waitForTranscription',
+    );
+  }
 }

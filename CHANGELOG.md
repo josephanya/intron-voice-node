@@ -4,6 +4,8 @@ All notable changes to this package will be documented in this file.
 
 ## 0.0.0
 
+- Added asynchronous STT file upload, status polling, typed result parsing, and
+  documented audio format validation.
 - Added authenticated JSON and multipart HTTP request helpers, default
   `fetch` transport, timeout propagation, and bounded retry policy support.
 - Added configuration validation, token provider authentication, base URL

@@ -23,7 +23,28 @@ export {
 export type { IntronApiErrorOptions } from './errors/index.js';
 export { redactLogFields } from './logging/redaction.js';
 export type { IntronLogFields, IntronLogger } from './logging/types.js';
+export {
+  createSttUploadFormData,
+  isTerminalSttStatus,
+  parseSttJob,
+  parseSttJobStatus,
+  toSttResult,
+  validateAudioFilename,
+} from './stt/files.js';
 export type {
+  SttFileCategory,
+  SttFileStatusOptions,
+  SttJob,
+  SttJobStatus,
+  SttPostProcessingOptions,
+  SttProcessingStatus,
+  SttRequestMetadata,
+  SttResult,
+  SttUploadOptions,
+  WaitForTranscriptionOptions,
+} from './stt/types.js';
+export type {
+  IntronAsyncIterableUploadSource,
   IntronHttpRequestRetryOptions,
   IntronHttpRetryPolicy,
   IntronFileUploadSource,
