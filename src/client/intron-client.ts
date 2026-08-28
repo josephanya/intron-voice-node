@@ -45,6 +45,25 @@ import type {
   SttUploadOptions,
   WaitForTranscriptionOptions,
 } from '../stt/types.js';
+import {
+  createTtsSynthesisJson,
+  isTerminalTtsStatus,
+  parseTtsJob,
+  parseTtsJobStatus,
+  toTtsResult,
+  validateTtsGenerateOptions,
+  validateTtsQueueOptions,
+  withTtsAudio,
+} from '../tts/files.js';
+import type {
+  TtsGenerateOptions,
+  TtsJob,
+  TtsJobStatus,
+  TtsResult,
+  TtsStatusOptions,
+  TtsQueueOptions,
+  WaitForSpeechOptions,
+} from '../tts/types.js';
 import type {
   IntronAuthOptions,
   IntronClientConfig,
@@ -300,6 +319,126 @@ export class IntronClient {
   }
 
   /**
+   * Generates speech synchronously for a text input.
+   *
+   * @param options - TTS text, voice, and output options.
+   */
+  public async generateSpeech(options: TtsGenerateOptions): Promise<TtsResult> {
+    validateTtsGenerateOptions(options);
+    const response = await this.requestJsonResponse<unknown>({
+      method: 'POST',
+      path: '/tts/v1/generate',
+      json: createTtsSynthesisJson(options),
+      operation: 'tts.generateSpeech',
+      retry: options.retry ?? false,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
+    const status = parseTtsJobStatus(
+      response.body,
+      createRequestMetadata(response),
+    );
+
+    return toTtsResult(
+      await this.attachTtsAudio(status, {
+        ...(options.downloadAudio === undefined
+          ? {}
+          : { downloadAudio: options.downloadAudio }),
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+      }),
+    );
+  }
+
+  /**
+   * Queues text for asynchronous speech synthesis.
+   *
+   * @param options - TTS text, voice, and output options.
+   */
+  public async enqueueSpeech(options: TtsQueueOptions): Promise<TtsJob> {
+    validateTtsQueueOptions(options);
+    const response = await this.requestJsonResponse<unknown>({
+      method: 'POST',
+      path: '/tts/v1/enqueue',
+      json: createTtsSynthesisJson(options),
+      operation: 'tts.enqueueSpeech',
+      retry: options.retry ?? false,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
+
+    return parseTtsJob(response.body, createRequestMetadata(response));
+  }
+
+  /**
+   * Gets queued TTS processing status and optional generated audio metadata.
+   *
+   * @param textId - Text identifier returned by {@link enqueueSpeech}.
+   * @param options - Optional status request controls.
+   */
+  public async getSpeechStatus(
+    textId: string,
+    options: TtsStatusOptions = {},
+  ): Promise<TtsJobStatus> {
+    const response = await this.requestJsonResponse<unknown>({
+      method: 'GET',
+      path: `/tts/v1/status/${encodeURIComponent(textId)}`,
+      operation: 'tts.getSpeechStatus',
+      retry: options.retry ?? true,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
+    const status = parseTtsJobStatus(
+      response.body,
+      createRequestMetadata(response),
+    );
+
+    return this.attachTtsAudio(status, {
+      ...(options.downloadAudio === undefined
+        ? {}
+        : { downloadAudio: options.downloadAudio }),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
+  }
+
+  /**
+   * Polls queued TTS status until synthesis reaches a terminal state.
+   *
+   * @param options - Polling controls.
+   */
+  public async waitForSpeech(
+    options: WaitForSpeechOptions,
+  ): Promise<TtsResult> {
+    const startedAt = this.clock.now();
+    const pollingIntervalMs = options.pollingIntervalMs ?? 2_000;
+
+    for (;;) {
+      throwIfAborted(options.signal, 'tts.waitForSpeech');
+
+      if (
+        options.timeoutMs !== undefined &&
+        this.clock.now() - startedAt > options.timeoutMs
+      ) {
+        throw new IntronProtocolError({
+          message: 'Timed out waiting for Intron TTS synthesis.',
+          operation: 'tts.waitForSpeech',
+        });
+      }
+
+      const status = await this.getSpeechStatus(options.textId, {
+        ...(options.downloadAudio === undefined
+          ? {}
+          : { downloadAudio: options.downloadAudio }),
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+        ...(options.retry === undefined ? {} : { retry: options.retry }),
+      });
+      options.onStatus?.(status);
+
+      if (isTerminalTtsStatus(status.status)) {
+        return toTtsResult(status);
+      }
+
+      await waitForDelay(this.clock, pollingIntervalMs, options.signal);
+    }
+  }
+
+  /**
    * Gets the status and result fields for an asynchronous transcription job.
    *
    * @param fileId - File identifier returned by {@link uploadAudioFile}.
@@ -341,7 +480,7 @@ export class IntronClient {
     const pollingIntervalMs = options.pollingIntervalMs ?? 2_000;
 
     for (;;) {
-      throwIfAborted(options.signal);
+      throwIfAborted(options.signal, 'stt.waitForTranscription');
 
       if (
         options.timeoutMs !== undefined &&
@@ -670,6 +809,63 @@ export class IntronClient {
 
     await waitForDelay(this.clock, delayMs, signal);
   }
+
+  private async attachTtsAudio(
+    status: TtsJobStatus,
+    options: {
+      readonly downloadAudio?: boolean;
+      readonly signal?: AbortSignal;
+    },
+  ): Promise<TtsJobStatus> {
+    if (options.downloadAudio !== true || status.audioPath === undefined) {
+      return status;
+    }
+
+    return withTtsAudio(
+      status,
+      await this.downloadTtsAudio(status.audioPath, options.signal),
+    );
+  }
+
+  private async downloadTtsAudio(
+    audioPath: string,
+    signal: AbortSignal | undefined,
+  ): Promise<Uint8Array> {
+    const timeoutMs = this.config.receiveTimeout ?? this.config.requestTimeout;
+    const timeoutSignal = createTimeoutSignal({
+      clock: this.clock,
+      ...(signal === undefined ? {} : { signal }),
+      ...(timeoutMs === undefined ? {} : { timeoutMs }),
+    });
+
+    try {
+      throwIfRequestAborted(timeoutSignal.signal, 'tts.downloadSpeechAudio');
+      const authorization = await this.resolveAuthorizationHeader({
+        signal: timeoutSignal.signal,
+      });
+      throwIfRequestAborted(timeoutSignal.signal, 'tts.downloadSpeechAudio');
+      const response = await this.httpTransport.send({
+        method: 'GET',
+        url: new URL(audioPath),
+        headers: {
+          accept: 'audio/*',
+          authorization,
+        },
+        signal: timeoutSignal.signal,
+      });
+
+      if (isSuccessfulStatus(response.status, undefined)) {
+        return response.body;
+      }
+
+      throw this.createHttpErrorFromResponse(
+        response,
+        'tts.downloadSpeechAudio',
+      );
+    } finally {
+      timeoutSignal.dispose();
+    }
+  }
 }
 
 interface ParsedErrorMetadata {
@@ -891,12 +1087,15 @@ function createRequestMetadata(response: {
   };
 }
 
-function throwIfAborted(signal: AbortSignal | undefined): void {
+function throwIfAborted(
+  signal: AbortSignal | undefined,
+  operation: string,
+): void {
   if (signal?.aborted === true) {
     throw createIntronTransportError(
       signal.reason ??
         new DOMException('Intron request was cancelled.', 'AbortError'),
-      'stt.waitForTranscription',
+      operation,
     );
   }
 }

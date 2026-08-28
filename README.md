@@ -24,6 +24,8 @@ Phase 5 adds WebSocket streaming transcription for PCM16 little-endian audio.
 Phase 6 adds streaming rollover and reconnect lifecycle handling for long-lived
 audio streams.
 
+Phase 7 adds synchronous and queued text-to-speech generation over REST.
+
 ## Requirements
 
 - Node.js 20 or newer
@@ -142,6 +144,49 @@ backoff, and 5 seconds maximum backoff. Override these with
 `maxReconnectBufferBytes`, `maxReconnectAttempts`, `reconnectInitialDelayMs`,
 and `reconnectMaxDelayMs` when your audio producer needs different failure or
 latency tradeoffs.
+
+Generate speech from text synchronously:
+
+```ts
+const speech = await client.generateSpeech({
+  text: 'Your appointment is confirmed for 10 AM.',
+  voiceLanguage: 'en',
+  voiceAccent: 'gh',
+  voiceGender: 'female',
+  outputAudioFormat: 'wav',
+  downloadAudio: true,
+});
+
+console.log(speech.audioPath, speech.audioDurationSeconds);
+console.log(speech.audio); // Uint8Array when downloadAudio is true
+```
+
+Queue longer-running speech synthesis and poll for completion:
+
+```ts
+const job = await client.enqueueSpeech({
+  text: 'Please collect your medication after the consultation.',
+  voiceLanguage: 'en',
+  voiceAccent: 'gh',
+  voiceGender: 'male',
+  outputAudioFormat: 'opus',
+});
+
+const speech = await client.waitForSpeech({
+  textId: job.textId,
+  pollingIntervalMs: 2000,
+  timeoutMs: 2 * 60 * 1000,
+});
+
+console.log(speech.audioPath);
+```
+
+TTS text is validated locally at the documented 4096 character limit. The SDK
+sends `voice_language`, `voice_accent`, `voice_gender`, and
+`output_audio_format` using the service's JSON field names, and currently
+accepts WAV and OPUS output formats. Remote `audioPath` values should be treated
+as ephemeral service paths; set `downloadAudio: true` when you want the SDK to
+fetch the bytes immediately as a `Uint8Array`.
 
 Supported upload sources include local paths, `Uint8Array` buffers, Node.js
 `Readable` streams, and `AsyncIterable<Uint8Array>` chunks. Supported file

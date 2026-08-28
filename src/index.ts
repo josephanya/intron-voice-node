@@ -58,6 +58,31 @@ export type {
   SttUploadOptions,
   WaitForTranscriptionOptions,
 } from './stt/types.js';
+export {
+  createTtsSynthesisJson,
+  isTerminalTtsStatus,
+  parseTtsJob,
+  parseTtsJobStatus,
+  toTtsResult,
+  validateTtsGenerateOptions,
+  validateTtsQueueOptions,
+  withTtsAudio,
+} from './tts/files.js';
+export type {
+  TtsFailureDetails,
+  TtsGenerateOptions,
+  TtsJob,
+  TtsJobStatus,
+  TtsOutputAudioFormat,
+  TtsProcessingStatus,
+  TtsQueueOptions,
+  TtsRequestMetadata,
+  TtsResult,
+  TtsStatusOptions,
+  TtsSynthesisOptions,
+  TtsVoiceGender,
+  WaitForSpeechOptions,
+} from './tts/types.js';
 export type {
   IntronAsyncIterableUploadSource,
   IntronHttpRequestRetryOptions,
