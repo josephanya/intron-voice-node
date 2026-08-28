@@ -4,6 +4,9 @@ All notable changes to this package will be documented in this file.
 
 ## 0.0.0
 
+- Added WebSocket STT streaming with typed events, transcript iterators,
+  sequential audio acknowledgements, chunk validation, cancellation, and a
+  default `ws` transport.
 - Added synchronous STT file upload and transcription with duration metadata
   validation and typed 503 fallback errors that preserve the file ID.
 - Added asynchronous STT file upload, status polling, typed result parsing, and

@@ -19,6 +19,8 @@ and polling until a transcription reaches a terminal state.
 Phase 4 adds synchronous file transcription for audio clips supported by the
 sync endpoint.
 
+Phase 5 adds WebSocket streaming transcription for PCM16 little-endian audio.
+
 ## Requirements
 
 - Node.js 20 or newer
@@ -94,6 +96,34 @@ console.log(result.transcript);
 The synchronous endpoint supports audio up to 120 seconds. When
 `audioDurationSeconds` is provided, the SDK validates that metadata before
 uploading; it does not measure the file duration.
+
+Stream PCM16 little-endian audio over WebSocket:
+
+```ts
+const session = await client.startStreamingTranscription({
+  audio: pcm16Chunks,
+  sampleRate: 16000,
+  bitRate: 16,
+  channels: 1,
+  language: 'en',
+});
+
+for await (const event of session.transcriptEvents) {
+  if (event.type === 'partial_transcript') {
+    console.log('partial', event.transcript);
+  }
+
+  if (event.type === 'committed_transcript') {
+    console.log('final', event.transcript);
+  }
+}
+```
+
+Streaming audio can be an `AsyncIterable<Uint8Array>`, Node.js `Readable`, or
+Web `ReadableStream<Uint8Array>`. Chunks must contain complete PCM16 sample
+frames and be between 1 KB and 32 KB. Audio read before `SESSION_CREATED` is
+held at the current chunk boundary, so the SDK never sends early audio or keeps
+an unbounded pre-session buffer.
 
 Supported upload sources include local paths, `Uint8Array` buffers, Node.js
 `Readable` streams, and `AsyncIterable<Uint8Array>` chunks. Supported file

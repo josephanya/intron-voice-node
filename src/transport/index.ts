@@ -1,4 +1,5 @@
 import type { Readable } from 'node:stream';
+import WebSocket, { type RawData } from 'ws';
 
 /**
  * HTTP request shape used by injectable SDK transports.
@@ -173,6 +174,179 @@ export interface IntronWebSocketTransport {
   }): Promise<IntronWebSocketConnection>;
   /** Releases transport resources. */
   close(): Promise<void>;
+}
+
+/**
+ * Default WebSocket transport backed by the `ws` package.
+ */
+export class IntronWsWebSocketTransport implements IntronWebSocketTransport {
+  /** Opens a WebSocket connection. */
+  public connect(options: {
+    readonly url: URL;
+    readonly headers?: Readonly<Record<string, string>>;
+    readonly signal?: AbortSignal;
+  }): Promise<IntronWebSocketConnection> {
+    if (options.signal?.aborted === true) {
+      return Promise.reject(toWebSocketAbortError(options.signal.reason));
+    }
+
+    return new Promise<IntronWebSocketConnection>((resolve, reject) => {
+      const socket = new WebSocket(options.url, {
+        ...(options.headers === undefined ? {} : { headers: options.headers }),
+      });
+      const abortListener = () => {
+        socket.close();
+        reject(toWebSocketAbortError(options.signal?.reason));
+      };
+      const cleanup = () => {
+        options.signal?.removeEventListener('abort', abortListener);
+        socket.off('open', handleOpen);
+        socket.off('error', handleError);
+      };
+      const handleOpen = () => {
+        cleanup();
+        resolve(new IntronWsWebSocketConnection(socket));
+      };
+      const handleError = (error: Error) => {
+        cleanup();
+        reject(error);
+      };
+
+      options.signal?.addEventListener('abort', abortListener, { once: true });
+      socket.once('open', handleOpen);
+      socket.once('error', handleError);
+    });
+  }
+
+  /** Releases transport resources. */
+  public close(): Promise<void> {
+    return Promise.resolve();
+  }
+}
+
+function toWebSocketAbortError(reason: unknown): Error {
+  if (reason instanceof Error) {
+    return reason;
+  }
+
+  const error = new Error(
+    typeof reason === 'string' ? reason : 'WebSocket connection aborted.',
+  );
+  error.name = 'AbortError';
+
+  return error;
+}
+
+class IntronWsWebSocketConnection implements IntronWebSocketConnection {
+  private readonly socket: WebSocket;
+
+  public constructor(socket: WebSocket) {
+    this.socket = socket;
+  }
+
+  public get state(): IntronWebSocketState {
+    switch (this.socket.readyState) {
+      case WebSocket.CONNECTING:
+        return 'connecting';
+      case WebSocket.OPEN:
+        return 'open';
+      case WebSocket.CLOSING:
+        return 'closing';
+      default:
+        return 'closed';
+    }
+  }
+
+  public send(data: string | Uint8Array): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      this.socket.send(data, (error) => {
+        if (error === undefined) {
+          resolve();
+          return;
+        }
+
+        reject(error);
+      });
+    });
+  }
+
+  public close(code?: number, reason?: string): Promise<void> {
+    if (this.state === 'closed') {
+      return Promise.resolve();
+    }
+
+    return new Promise<void>((resolve) => {
+      this.socket.once('close', () => {
+        resolve();
+      });
+      this.socket.close(code, reason);
+    });
+  }
+
+  public on<EventName extends keyof IntronWebSocketEventMap>(
+    event: EventName,
+    handler: (payload: IntronWebSocketEventMap[EventName]) => void,
+  ): () => void {
+    const listener = createWsListener(event, handler);
+    this.socket.on(event, listener);
+
+    return () => {
+      this.socket.off(event, listener);
+    };
+  }
+}
+
+function createWsListener<EventName extends keyof IntronWebSocketEventMap>(
+  event: EventName,
+  handler: (payload: IntronWebSocketEventMap[EventName]) => void,
+): (...args: unknown[]) => void {
+  if (event === 'message') {
+    return (...args: unknown[]) => {
+      const data = args[0] as RawData;
+
+      handler(normalizeWsMessage(data) as IntronWebSocketEventMap[EventName]);
+    };
+  }
+
+  if (event === 'close') {
+    return (...args: unknown[]) => {
+      const code = args[0] as number;
+      const reason = args[1] as Buffer;
+
+      handler({
+        code,
+        reason: reason.toString('utf8'),
+      } as IntronWebSocketEventMap[EventName]);
+    };
+  }
+
+  if (event === 'error') {
+    return (...args: unknown[]) => {
+      const error = args[0] as Error;
+
+      handler(error as IntronWebSocketEventMap[EventName]);
+    };
+  }
+
+  return () => {
+    handler(undefined as IntronWebSocketEventMap[EventName]);
+  };
+}
+
+function normalizeWsMessage(data: RawData): string | Uint8Array {
+  if (typeof data === 'string') {
+    return data;
+  }
+
+  if (data instanceof ArrayBuffer) {
+    return new Uint8Array(data);
+  }
+
+  if (Array.isArray(data)) {
+    return Buffer.concat(data);
+  }
+
+  return data;
 }
 
 /**

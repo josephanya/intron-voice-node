@@ -12,11 +12,18 @@ import type {
   IntronClock,
   IntronHttpRequest,
   IntronHttpTransport,
+  IntronWebSocketTransport,
 } from '../transport/index.js';
 import {
   IntronFetchHttpTransport,
   IntronSystemClock,
+  IntronWsWebSocketTransport,
 } from '../transport/index.js';
+import {
+  createSttStreamingSession,
+  createSttStreamingUrl,
+  validateSttStreamingOptions,
+} from '../stt/streaming.js';
 import {
   createSttUploadFormData,
   isTerminalSttStatus,
@@ -32,6 +39,8 @@ import type {
   SttJobStatus,
   SttRequestMetadata,
   SttResult,
+  SttStreamingOptions,
+  SttStreamingSession,
   SttSyncUploadOptions,
   SttUploadOptions,
   WaitForTranscriptionOptions,
@@ -81,6 +90,7 @@ interface IntronResponseOptions {
 export class IntronClient {
   private readonly config: IntronResolvedClientConfig;
   private readonly httpTransport: IntronHttpTransport;
+  private readonly websocketTransport: IntronWebSocketTransport;
   private readonly clock: IntronClock;
   private readonly secrets: IntronClientSecrets;
 
@@ -128,6 +138,8 @@ export class IntronClient {
       }),
     });
     this.httpTransport = config.httpTransport ?? new IntronFetchHttpTransport();
+    this.websocketTransport =
+      config.websocketTransport ?? new IntronWsWebSocketTransport();
     this.clock = config.clock ?? new IntronSystemClock();
     this.secrets = Object.freeze({
       ...(apiKey === undefined ? {} : { apiKey }),
@@ -236,6 +248,32 @@ export class IntronClient {
     }
 
     return toSttResult(status);
+  }
+
+  /**
+   * Opens a WebSocket session for streaming STT transcription.
+   *
+   * @param options - Streaming transcription options.
+   */
+  public async startStreamingTranscription(
+    options: SttStreamingOptions,
+  ): Promise<SttStreamingSession> {
+    validateSttStreamingOptions(options);
+    const authorization = await this.resolveAuthorizationHeader({
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
+    const connection = await this.websocketTransport.connect({
+      url: createSttStreamingUrl(this.config.websocketBaseUrl, options),
+      headers: { authorization },
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
+
+    return createSttStreamingSession({
+      connection,
+      audio: options.audio,
+      ...(options.channels === undefined ? {} : { channels: options.channels }),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
   }
 
   /**
@@ -418,6 +456,7 @@ export class IntronClient {
    */
   public async close(): Promise<void> {
     await this.httpTransport.close();
+    await this.websocketTransport.close();
   }
 
   /**

@@ -1,3 +1,5 @@
+import type { Readable } from 'node:stream';
+
 import type { IntronRequestOptions } from '../client/types.js';
 import type { IntronFileUploadSource } from '../transport/index.js';
 
@@ -143,4 +145,119 @@ export interface WaitForTranscriptionOptions extends SttFileStatusOptions {
   readonly timeoutMs?: number;
   /** Callback invoked after every status response. */
   readonly onStatus?: (status: SttJobStatus) => void;
+}
+
+/** STT streaming session lifecycle states. */
+export enum SttSessionState {
+  Connecting = 'connecting',
+  Ready = 'ready',
+  Active = 'active',
+  Committing = 'committing',
+  Reconnecting = 'reconnecting',
+  Completed = 'completed',
+  Failed = 'failed',
+  Cancelled = 'cancelled',
+}
+
+/** Audio sources accepted by streaming STT. */
+export type SttStreamingAudioSource =
+  AsyncIterable<Uint8Array> | Readable | ReadableStream<Uint8Array>;
+
+/** Options for streaming STT transcription. */
+export interface SttStreamingOptions {
+  /** PCM16 little-endian audio chunks. */
+  readonly audio: SttStreamingAudioSource;
+  /** Input audio sample rate in Hz. Defaults to 16000. */
+  readonly sampleRate?: number;
+  /** Input PCM bit depth. Defaults to 16. */
+  readonly bitRate?: number;
+  /** Number of input channels. Defaults to 1. */
+  readonly channels?: number;
+  /** Input language code. Defaults to `en`. */
+  readonly language?: string;
+  /** Optional cancellation signal. */
+  readonly signal?: AbortSignal;
+}
+
+/** Documented STT streaming server message types. */
+export type SttStreamingServerMessageType =
+  | 'SESSION_CREATED'
+  | 'AUDIO_CHUCK_ACK'
+  | 'PARTIAL_TRANSCRIPT'
+  | 'COMMITTED_TRANSCRIPT'
+  | 'ERROR'
+  | 'INPUT_ERROR'
+  | 'AUTHENTICATION_ERROR'
+  | 'RESOURCE_EXHAUSTED'
+  | 'QUOTA_EXCEEDED'
+  | 'SESSION_TIME_LIMIT_EXCEEDED'
+  | 'CHUNCK_SIZE_TOO_SMALL'
+  | 'CHUNK_SIZE_TOO_LARGE'
+  | 'INSUFFICIENT_AUDIO_ACTIVITY'
+  | 'CHUNK_ID_MISMATCH_WITH_TOTAL';
+
+/** Transcript events emitted by streaming STT. */
+export type SttTranscriptEvent =
+  | {
+      readonly type: 'partial_transcript';
+      readonly messageType: 'PARTIAL_TRANSCRIPT';
+      readonly transcript: string;
+      readonly raw: unknown;
+    }
+  | {
+      readonly type: 'committed_transcript';
+      readonly messageType: 'COMMITTED_TRANSCRIPT';
+      readonly transcript: string;
+      readonly raw: unknown;
+    };
+
+/** Typed events emitted by streaming STT sessions. */
+export type SttStreamingEvent =
+  | {
+      readonly type: 'session_created';
+      readonly messageType: 'SESSION_CREATED';
+      readonly sessionId?: string;
+      readonly raw: unknown;
+    }
+  | {
+      readonly type: 'audio_chunk_ack';
+      readonly messageType: 'AUDIO_CHUCK_ACK';
+      readonly ackId?: number;
+      readonly raw: unknown;
+    }
+  | SttTranscriptEvent
+  | {
+      readonly type: 'server_error';
+      readonly messageType: Exclude<
+        SttStreamingServerMessageType,
+        | 'SESSION_CREATED'
+        | 'AUDIO_CHUCK_ACK'
+        | 'PARTIAL_TRANSCRIPT'
+        | 'COMMITTED_TRANSCRIPT'
+      >;
+      readonly error: Error;
+      readonly raw: unknown;
+    }
+  | {
+      readonly type: 'protocol_error';
+      readonly error: Error;
+      readonly raw?: unknown;
+    }
+  | { readonly type: 'transport_error'; readonly error: Error }
+  | {
+      readonly type: 'closed';
+      readonly code?: number;
+      readonly reason?: string;
+    };
+
+/** Active STT streaming session. */
+export interface SttStreamingSession extends AsyncDisposable {
+  /** All streaming lifecycle, transcript, and error events. */
+  readonly events: AsyncIterable<SttStreamingEvent>;
+  /** Partial and committed transcript events only. */
+  readonly transcriptEvents: AsyncIterable<SttTranscriptEvent>;
+  /** Current lifecycle state. */
+  readonly state: SttSessionState;
+  /** Commits pending audio and closes the socket. */
+  close(): Promise<void>;
 }

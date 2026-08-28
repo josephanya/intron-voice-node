@@ -24,6 +24,12 @@ export type { IntronApiErrorOptions } from './errors/index.js';
 export { redactLogFields } from './logging/redaction.js';
 export type { IntronLogFields, IntronLogger } from './logging/types.js';
 export {
+  createSttStreamingSession,
+  createSttStreamingUrl,
+  validateSttStreamingOptions,
+} from './stt/streaming.js';
+export { SttSessionState } from './stt/types.js';
+export {
   createSttUploadFormData,
   isTerminalSttStatus,
   parseSttJob,
@@ -42,6 +48,12 @@ export type {
   SttProcessingStatus,
   SttRequestMetadata,
   SttResult,
+  SttStreamingAudioSource,
+  SttStreamingEvent,
+  SttStreamingOptions,
+  SttStreamingServerMessageType,
+  SttStreamingSession,
+  SttTranscriptEvent,
   SttSyncUploadOptions,
   SttUploadOptions,
   WaitForTranscriptionOptions,
